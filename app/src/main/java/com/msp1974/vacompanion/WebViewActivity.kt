@@ -230,7 +230,7 @@ public class WebViewActivity : AppCompatActivity(), SwipeRefreshLayout.OnRefresh
                     view: WebView,
                     detail: RenderProcessGoneDetail?
                 ): Boolean {
-                    log.d("Webview render process gone: $detail")
+                    log.e("Webview render process gone: $detail")
                     if (webView!! == view && detail?.didCrash() == true) {
                         swipeRefreshLayout!!.removeAllViews()
                         view.removeAllViews()
