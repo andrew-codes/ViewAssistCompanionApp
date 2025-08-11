@@ -79,7 +79,7 @@ class DeviceCapabilitiesManager(val context: Context) {
         val batteryStatus = context.registerReceiver(null, intentFilter)
         val hasBattery = batteryStatus?.getBooleanExtra(BatteryManager.EXTRA_PRESENT, false)
         val batteryVoltage = batteryStatus?.getIntExtra(BatteryManager.EXTRA_VOLTAGE, 0)
-        return hasBattery == true && batteryVoltage != 0
+        return hasBattery == true && batteryVoltage != 0 && Helpers.getDeviceName().toString() != "Lenovo StarView"
     }
 
     fun hasLightSensor(): Boolean {
