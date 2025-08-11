@@ -66,11 +66,26 @@ public class WebViewActivity : AppCompatActivity(), SwipeRefreshLayout.OnRefresh
     @SuppressLint("SetJavaScriptEnabled", "SetTextI18n", "ClickableViewAccessibility")
     override fun onCreate(savedInstanceState: Bundle?) {
         log.d("Starting WebViewActivity")
+
         super.onCreate(savedInstanceState)
         this.enableEdgeToEdge()
 
         screen = ScreenUtils(this)
         config = APPConfig.getInstance(this)
+
+        // Check for recovered WebViewActivity while screen off.
+        // Restart MainActivity if necessary
+        if (!screen.isScreenOn() || !config.backgroundTaskRunning) {
+            if (isTaskRoot) {
+                log.d("Launching MainActivity from Webview Activity")
+                val intent = Intent(this, MainActivity::class.java)
+                intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                startActivity(intent)
+            }
+            config.eventBroadcaster.removeListener(this)
+            screen.setDeviceBrightnessMode(true)
+            finish()
+        }
 
         setContentView(R.layout.activity_webview)
 
@@ -368,6 +383,12 @@ public class WebViewActivity : AppCompatActivity(), SwipeRefreshLayout.OnRefresh
     }
 
     override fun onResume() {
+        // Check for screen off or background task not running and if so exit
+        if (!screen.isScreenOn() || !config.backgroundTaskRunning) {
+            config.eventBroadcaster.removeListener(this)
+            screen.setDeviceBrightnessMode(true)
+            finish()
+        }
         super.onResume()
         // Keep screen on
         setScreenAlwaysOn(config.screenAlwaysOn)

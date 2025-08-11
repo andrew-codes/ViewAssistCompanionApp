@@ -134,7 +134,7 @@ class MainActivity : AppCompatActivity() {
         // Initiate wake word broadcast receiver
         var satelliteBroadcastReceiver: BroadcastReceiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context, intent: Intent) {
-                if (config.currentActivity != "WebViewActivity") {
+                if (config.currentActivity != "WebViewActivity" && screen.isScreenOn()) {
                     runWebViewIntent()
                 }
             }
@@ -202,6 +202,10 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun runBackgroundTasks() {
+        if ( config.backgroundTaskRunning ) {
+            log.w("Background task already running.  Not starting from MainActivity")
+            return
+        }
         log.d("Starting background tasks")
         val serviceIntent = Intent(this.applicationContext, VABackgroundService::class.java)
         startService(serviceIntent)

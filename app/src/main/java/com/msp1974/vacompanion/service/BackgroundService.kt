@@ -12,17 +12,20 @@ import android.os.IBinder
 import androidx.core.app.ActivityCompat
 import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
+import com.msp1974.vacompanion.MainActivity
 import com.msp1974.vacompanion.R
+import com.msp1974.vacompanion.settings.APPConfig
 import com.msp1974.vacompanion.utils.Logger
 import com.msp1974.vacompanion.utils.NotificationUtils
 
 
 class VABackgroundService : Service() {
     private val log = Logger()
+    private lateinit var config: APPConfig
     private var wifiLock: WifiManager.WifiLock? = null
     private var keyguardLock: KeyguardManager.KeyguardLock? = null
 
-    private val backgroundTask = BackgroundTaskController(this)
+    private var backgroundTask:  BackgroundTaskController? = null
 
     override fun onBind(intent: Intent?): IBinder? {
         return null
@@ -30,6 +33,8 @@ class VABackgroundService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+
+        config = APPConfig.getInstance(this)
 
         // wifi lock
         val wifiManager = applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
@@ -42,6 +47,7 @@ class VABackgroundService : Service() {
             keyguardLock = keyguardManager.newKeyguardLock("ALARM_KEYBOARD_LOCK_TAG")
             keyguardLock!!.disableKeyguard()
         }
+
         // Set notification
         notificationService()
     }
@@ -88,9 +94,19 @@ class VABackgroundService : Service() {
             log.i("Disabling keyguard didn't work")
             ex.printStackTrace()
         }
-
-        backgroundTask.start()
+        backgroundTask = BackgroundTaskController(this)
+        backgroundTask?.start()
         log.i("Background Service Started")
+        config.backgroundTaskRunning = true
+
+        // TEST Launch Activity
+        if (config.currentActivity == "") {
+            log.i("Launching MainActivity from foreground service")
+            val intent = Intent(this, MainActivity::class.java)
+            intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            startActivity(intent)
+        }
+
         return START_STICKY
     }
 
@@ -104,7 +120,7 @@ class VABackgroundService : Service() {
 
     override fun onDestroy() {
         log.i("Stopping Background Service")
-        backgroundTask.shutdown()
+        backgroundTask?.shutdown()
 
         // Release any lock from this app
         if (wifiLock != null && wifiLock!!.isHeld) {

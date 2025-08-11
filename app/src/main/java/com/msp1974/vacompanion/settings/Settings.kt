@@ -45,6 +45,7 @@ class APPConfig(val context: Context) {
 
     var connectionCount: Int = 0
     var currentActivity: String = ""
+    var backgroundTaskRunning: Boolean = false
     var isRunning: Boolean = false
 
     var hasRecordAudioPermission: Boolean = true
