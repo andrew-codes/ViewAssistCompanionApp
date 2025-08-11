@@ -27,6 +27,7 @@ import android.webkit.WebViewClient
 import android.widget.PopupWindow
 import android.widget.TextView
 import android.widget.Toast
+import androidx.activity.OnBackPressedCallback
 import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AppCompatDelegate
@@ -123,6 +124,13 @@ public class WebViewActivity : AppCompatActivity(), SwipeRefreshLayout.OnRefresh
             addAction(BroadcastSender.REFRESH)
         }
         LocalBroadcastManager.getInstance(this).registerReceiver(satelliteBroadcastReceiver, filter)
+
+        // Handle back action
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            onBackInvokedDispatcher.registerOnBackInvokedCallback(1000) {
+                onBackPressedDispatcher.onBackPressed()
+            }
+        }
 
         // Setup WebView and load html page
         swipeRefreshLayout?.setOnRefreshListener(this);
