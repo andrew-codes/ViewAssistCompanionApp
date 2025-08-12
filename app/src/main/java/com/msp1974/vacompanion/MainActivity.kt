@@ -20,6 +20,7 @@ import android.provider.Settings
 import android.widget.ImageView
 import android.widget.TextView
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.SwitchCompat
 import androidx.core.app.ActivityCompat
@@ -295,9 +296,13 @@ class MainActivity : AppCompatActivity() {
         private const val NOTIFICATION_PERMISSIONS_REQUEST = 300
     }
 
+    private val onWriteSettingsPermissionActivityResult = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+        checkAndRequestNotificationAccessPolicyPermission()
+    }
+
     private fun checkAndRequestWriteSettingsPermission() {
-        log.d("Checking write settings permission")
-        if (config.canSetScreenWritePermission && !ScreenUtils(this).canWriteScreenSetting()) {
+        val unsupportedDevices = listOf("None")
+        if (config.canSetScreenWritePermission && !ScreenUtils(this).canWriteScreenSetting() && Helpers.getDeviceName().toString() !in unsupportedDevices) {
             val alertDialog = AlertDialog.Builder(this)
             log.d("Requesting write settings permission")
             alertDialog.apply {
@@ -307,30 +312,48 @@ class MainActivity : AppCompatActivity() {
                     try {
                         val intent = Intent(Settings.ACTION_MANAGE_WRITE_SETTINGS)
                         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                        startActivity(intent)
-                        checkAndRequestNotificationAccessPolicyPermission()
-                        initialise()
-                        //onWriteSettingsPermissionActivityResult.launch(intent)
+                        onWriteSettingsPermissionActivityResult.launch(intent)
                     } catch (e: Exception) {
                         log.i("Device does not require explicit permission")
                         config.canSetScreenWritePermission = false
+                        checkAndRequestNotificationAccessPolicyPermission()
+                    }
+                }
+            }.create().show()
+        } else {
+            log.d("Write settings permission ${if (!config.canSetScreenWritePermission) "not required" else "already granted"}")
+            checkAndRequestNotificationAccessPolicyPermission()
+            //initialise()
+        }
+    }
+
+    private val onNotificationAccessPolicyPermissionActivityResult = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+        initialise()
+    }
+
+    private fun checkAndRequestNotificationAccessPolicyPermission() {
+        val notificationManager =  this.getSystemService(NOTIFICATION_SERVICE) as NotificationManager
+        val unsupportedDevices = listOf("LenovoCD-24502F", "Google iot_msm8x53_som")
+        if (!notificationManager.isNotificationPolicyAccessGranted && Helpers.getDeviceName().toString() !in unsupportedDevices) {
+            // If not granted, prompt the user to give permission.
+            val alertDialog = AlertDialog.Builder(this)
+            log.d("Requesting notification access policy permission")
+            alertDialog.apply {
+                setTitle("Notification Policy Access Permission Required")
+                setMessage("This application needs this permission to control the Do Not Disturb setting.  If your device has this capability and requires explicit permission, the screen will launch for you to enable it.")
+                setPositiveButton("Got it") { _: DialogInterface?, _: Int ->
+                    try {
+                        val intent = Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS)
+                        onNotificationAccessPolicyPermissionActivityResult.launch(intent)
+                    } catch (e: Exception) {
+                        log.i("Device does not require explicit permission")
                         initialise()
                     }
                 }
             }.create().show()
         } else {
-            log.d("Write settings permission ${if (!config.canSetScreenWritePermission) "not required" else "granted"}")
-            checkAndRequestNotificationAccessPolicyPermission()
+            log.d("Notification access policy permission already granted")
             initialise()
-        }
-    }
-
-    private fun checkAndRequestNotificationAccessPolicyPermission() {
-        val notificationManager =  this.getSystemService(NOTIFICATION_SERVICE) as NotificationManager
-        if (!notificationManager.isNotificationPolicyAccessGranted) {
-            // If not granted, prompt the user to give permission.
-            val intent = Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS)
-            startActivity(intent)
         }
     }
 
