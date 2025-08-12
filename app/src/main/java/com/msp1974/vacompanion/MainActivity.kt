@@ -3,6 +3,7 @@ package com.msp1974.vacompanion
 import android.Manifest.permission
 import android.annotation.SuppressLint
 import android.app.AlertDialog
+import android.app.NotificationManager
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.DialogInterface
@@ -307,6 +308,7 @@ class MainActivity : AppCompatActivity() {
                         val intent = Intent(Settings.ACTION_MANAGE_WRITE_SETTINGS)
                         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                         startActivity(intent)
+                        checkAndRequestNotificationAccessPolicyPermission()
                         initialise()
                         //onWriteSettingsPermissionActivityResult.launch(intent)
                     } catch (e: Exception) {
@@ -318,7 +320,17 @@ class MainActivity : AppCompatActivity() {
             }.create().show()
         } else {
             log.d("Write settings permission ${if (!config.canSetScreenWritePermission) "not required" else "granted"}")
+            checkAndRequestNotificationAccessPolicyPermission()
             initialise()
+        }
+    }
+
+    private fun checkAndRequestNotificationAccessPolicyPermission() {
+        val notificationManager =  this.getSystemService(NOTIFICATION_SERVICE) as NotificationManager
+        if (!notificationManager.isNotificationPolicyAccessGranted) {
+            // If not granted, prompt the user to give permission.
+            val intent = Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS)
+            startActivity(intent)
         }
     }
 

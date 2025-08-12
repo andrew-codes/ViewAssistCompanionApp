@@ -1,8 +1,11 @@
 package com.msp1974.vacompanion.service
 
+import android.app.NotificationManager
 import android.content.Context
+import android.content.Context.NOTIFICATION_SERVICE
 import android.content.res.AssetManager
 import android.media.AudioManager
+import androidx.core.content.ContextCompat.getSystemService
 import com.msp1974.vacompanion.Zeroconf
 import com.msp1974.vacompanion.audio.AudioDSP
 import com.msp1974.vacompanion.audio.AudioInCallback
@@ -295,20 +298,14 @@ internal class BackgroundTaskController (private val context: Context): EventLis
     }
 
     fun setDoNotDisturb(enable: Boolean) {
-
-        val sound = SoundControl(context)
-
-        if (enable) {
-            // Mute mic
-            //stopInputAudio()
-            // Enable silent mode
-            sound.setSoundMode(AudioManager.RINGER_MODE_SILENT)
-
-        } else {
-            // Un-mute mic
-            //startInputAudio(context)
-            // Disable silent mode
-            sound.setSoundMode(AudioManager.RINGER_MODE_NORMAL)
+        log.d("Setting do not disturb to $enable")
+        val notificationManager =  context.getSystemService(NOTIFICATION_SERVICE) as NotificationManager
+        if (notificationManager.isNotificationPolicyAccessGranted) {
+            if (enable) {
+                notificationManager.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_NONE)
+            } else {
+                notificationManager.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_ALL)
+            }
         }
     }
 }
