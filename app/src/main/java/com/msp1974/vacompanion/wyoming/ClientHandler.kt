@@ -12,9 +12,10 @@ import com.msp1974.vacompanion.audio.PCMMediaPlayer
 import com.msp1974.vacompanion.audio.VAMediaPlayer
 import com.msp1974.vacompanion.broadcasts.BroadcastSender
 import com.msp1974.vacompanion.settings.APPConfig
+import com.msp1974.vacompanion.utils.DeviceCapabilitiesManager
 import com.msp1974.vacompanion.utils.Logger
 import kotlinx.serialization.ExperimentalSerializationApi
-import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.addAll
 import kotlinx.serialization.json.buildJsonObject
@@ -170,7 +171,6 @@ class ClientHandler(private val context: Context, private val server: WyomingTCP
         server.releaseInputAudioStream()
     }
 
-    @OptIn(ExperimentalSerializationApi::class)
     private fun handleEvent(event: WyomingPacket) {
 
         if (event.type != "ping" && event.type != "pong" && event.type != "audio-chunk") {
@@ -485,20 +485,11 @@ class ClientHandler(private val context: Context, private val server: WyomingTCP
         )
     }
 
-    @OptIn(ExperimentalSerializationApi::class)
     fun sendCapabilities() {
+        val data = DeviceCapabilitiesManager.toJson(server.deviceInfo).toMap()
         sendCustomEvent("capabilities", buildJsonObject {
-            putJsonObject("capabilities") {
-                put("device_signature", server.deviceInfo.deviceSignature)
-                put("app_version", server.deviceInfo.appVersion)
-                put("sdk_version", server.deviceInfo.sdkVersion)
-                put("webview_version", server.deviceInfo.webViewVersion)
-                put("release", server.deviceInfo.release)
-                put("has_battery", server.deviceInfo.hasBattery)
-                put("has_front_camera", server.deviceInfo.hasFrontCamera)
-                putJsonArray("sensors") {
-                    addAll(server.deviceInfo.sensors)
-                }
+            for (key in data.keys) {
+                put(key, data[key] as JsonElement)
             }
         })
     }

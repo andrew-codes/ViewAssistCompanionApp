@@ -1,6 +1,8 @@
 package com.msp1974.vacompanion.utils
 
+import android.app.NotificationManager
 import android.content.Context
+import android.content.Context.NOTIFICATION_SERVICE
 import android.content.Intent
 import android.content.IntentFilter
 import android.hardware.Sensor
@@ -10,13 +12,14 @@ import android.hardware.camera2.CameraManager
 import android.os.BatteryManager
 import android.os.Build
 import android.webkit.WebView
-import kotlinx.serialization.Serializable
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import kotlinx.serialization.json.putJsonArray
+import kotlinx.serialization.json.putJsonObject
 
 
-@Serializable
 data class DeviceCapabilitiesData(
     val deviceSignature: String,
     val appVersion: String,
@@ -25,6 +28,7 @@ data class DeviceCapabilitiesData(
     val release: String,
     val hasBattery: Boolean,
     val hasFrontCamera: Boolean,
+    val hasDND: Boolean,
     val sensors: List<JsonObject>,
 )
 
@@ -42,6 +46,7 @@ class DeviceCapabilitiesManager(val context: Context) {
             release = Build.VERSION.RELEASE.toString(),
             hasBattery = hasBattery(),
             hasFrontCamera = hasFrontCamera(),
+            hasDND = hasDND(),
             sensors = getAvailableSensors(),
         )
     }
@@ -100,5 +105,31 @@ class DeviceCapabilitiesManager(val context: Context) {
             }
         }
         return false
+    }
+
+    fun hasDND(): Boolean {
+        val notificationManager =  context.getSystemService(NOTIFICATION_SERVICE) as NotificationManager
+        return notificationManager.isNotificationPolicyAccessGranted
+    }
+
+    companion object {
+        @OptIn(ExperimentalSerializationApi::class)
+        fun toJson(data: DeviceCapabilitiesData): JsonObject {
+            return buildJsonObject {
+                putJsonObject("capabilities") {
+                    put("device_signature", data.deviceSignature)
+                    put("app_version", data.appVersion)
+                    put("sdk_version", data.sdkVersion)
+                    put("webview_version", data.webViewVersion)
+                    put("release", data.release)
+                    put("has_battery", data.hasBattery)
+                    put("has_front_camera", data.hasFrontCamera)
+                    put("has_dnd", data.hasDND)
+                    putJsonArray("sensors") {
+                        addAll(data.sensors)
+                    }
+                }
+            }
+        }
     }
 }
