@@ -29,6 +29,8 @@ import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import com.msp1974.vacompanion.broadcasts.BroadcastSender
 import com.msp1974.vacompanion.service.VABackgroundService
 import com.msp1974.vacompanion.settings.APPConfig
+import com.msp1974.vacompanion.utils.DeviceCapabilitiesManager
+import com.msp1974.vacompanion.utils.FirebaseManager
 import com.msp1974.vacompanion.utils.Helpers
 import com.msp1974.vacompanion.utils.Logger
 import com.msp1974.vacompanion.utils.ScreenUtils
@@ -37,6 +39,7 @@ import com.msp1974.vacompanion.utils.ScreenUtils
 class MainActivity : AppCompatActivity() {
     private lateinit var config: APPConfig
     private val log = Logger()
+    private val firebase = FirebaseManager.getInstance()
 
     private lateinit var screen: ScreenUtils
     private var screenOrientation: Int = 0
@@ -51,7 +54,7 @@ class MainActivity : AppCompatActivity() {
         screen = ScreenUtils(this)
         screenOrientation = resources.configuration.orientation
 
-
+        setFirebaseUserProperties()
 
         if (!isTaskRoot) {
             log.i("MainActivity is not root")
@@ -112,6 +115,11 @@ class MainActivity : AppCompatActivity() {
         log.d("Checking permissions")
         checkAndRequestPermissions()
 
+    }
+
+    fun setFirebaseUserProperties() {
+        firebase.setUserProperty("webview_version", DeviceCapabilitiesManager(this).getWebViewVersion())
+        firebase.setUserProperty("device_signature", Helpers.getDeviceName().toString())
     }
 
     fun initialise() {
@@ -179,6 +187,7 @@ class MainActivity : AppCompatActivity() {
         log.d("Main Activity resumed")
         if (screen.isScreenOn() && config.isRunning) {
             log.d("Resuming webView activity")
+            firebase.logEvent("satellite_running_when_main_activity_resumed", mapOf())
             runWebViewIntent()
         }
     }
@@ -206,6 +215,7 @@ class MainActivity : AppCompatActivity() {
     private fun runBackgroundTasks() {
         if ( config.backgroundTaskRunning ) {
             log.w("Background task already running.  Not starting from MainActivity")
+            firebase.logEvent("main_activity_background_task_already_running", mapOf())
             return
         }
         log.d("Starting background tasks")

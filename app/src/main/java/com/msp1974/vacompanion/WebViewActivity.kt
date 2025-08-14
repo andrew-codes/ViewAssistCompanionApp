@@ -1,7 +1,6 @@
 package com.msp1974.vacompanion
 
 import android.annotation.SuppressLint
-import android.app.Instrumentation
 import android.app.UiModeManager
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -13,21 +12,16 @@ import android.os.Build
 import android.os.Bundle
 import android.os.StrictMode
 import android.os.StrictMode.ThreadPolicy
-import android.os.SystemClock
 import android.view.Gravity
-import android.view.KeyEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
-import android.view.inputmethod.BaseInputConnection
 import android.webkit.RenderProcessGoneDetail
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.PopupWindow
 import android.widget.TextView
-import android.widget.Toast
-import androidx.activity.OnBackPressedCallback
 import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AppCompatDelegate
@@ -47,12 +41,12 @@ import com.msp1974.vacompanion.utils.Logger
 import com.msp1974.vacompanion.utils.ScreenUtils
 import androidx.core.graphics.drawable.toDrawable
 import com.google.android.material.snackbar.Snackbar
-import java.io.IOException
-import kotlin.concurrent.thread
+import com.msp1974.vacompanion.utils.FirebaseManager
 import kotlin.math.abs
 
 public class WebViewActivity : AppCompatActivity(), SwipeRefreshLayout.OnRefreshListener, EventListener {
     private var log = Logger()
+    private val firebase = FirebaseManager.getInstance()
     private lateinit var config: APPConfig
     private lateinit var screen: ScreenUtils
 
@@ -260,6 +254,8 @@ public class WebViewActivity : AppCompatActivity(), SwipeRefreshLayout.OnRefresh
                         view.destroy()
                         finish()
                     }
+                    firebase.addToCrashLog("Render process gone: ${detail.toString()}")
+                    firebase.logEvent ("render_process_gone",mapOf("detail" to detail.toString()))
                     return super.onRenderProcessGone(view, detail)
                 }
 
@@ -410,6 +406,7 @@ public class WebViewActivity : AppCompatActivity(), SwipeRefreshLayout.OnRefresh
                 this.window?.attributes = layout
             }
         } catch (e: Exception) {
+            firebase.logException(e)
             e.printStackTrace()
         }
     }
@@ -469,9 +466,11 @@ public class WebViewActivity : AppCompatActivity(), SwipeRefreshLayout.OnRefresh
                     )
                     popup?.setBackgroundDrawable(Color.WHITE.toDrawable())
                     popup?.showAtLocation(webView, Gravity.TOP, 0, 0)
+                    firebase.logEvent(FirebaseManager.DIAGNOSTIC_POPUP_SHOWN,mapOf())
                 }
             } catch (e: Exception) {
                 log.e("Error showing diagnostics popup: ${e.message}")
+                firebase.logException(e)
             }
 
         } else {

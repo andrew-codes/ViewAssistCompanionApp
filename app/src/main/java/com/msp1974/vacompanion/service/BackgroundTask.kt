@@ -5,7 +5,6 @@ import android.content.Context
 import android.content.Context.NOTIFICATION_SERVICE
 import android.content.res.AssetManager
 import android.media.AudioManager
-import androidx.core.content.ContextCompat.getSystemService
 import com.msp1974.vacompanion.Zeroconf
 import com.msp1974.vacompanion.audio.AudioDSP
 import com.msp1974.vacompanion.audio.AudioInCallback
@@ -19,9 +18,9 @@ import com.msp1974.vacompanion.sensors.Sensors
 import com.msp1974.vacompanion.settings.APPConfig
 import com.msp1974.vacompanion.utils.Event
 import com.msp1974.vacompanion.utils.EventListener
+import com.msp1974.vacompanion.utils.FirebaseManager
 import com.msp1974.vacompanion.utils.Helpers
 import com.msp1974.vacompanion.utils.Logger
-import com.msp1974.vacompanion.utils.SoundControl
 import com.msp1974.vacompanion.wyoming.WyomingCallback
 import com.msp1974.vacompanion.wyoming.WyomingTCPServer
 import kotlinx.serialization.json.buildJsonObject
@@ -36,6 +35,7 @@ enum class AudioRouteOption { NONE, DETECT, STREAM}
 internal class BackgroundTaskController (private val context: Context): EventListener {
 
     private val log = Logger()
+    private val firebase = FirebaseManager.getInstance()
     private var config: APPConfig = APPConfig.getInstance(context)
 
     val zeroConf: Zeroconf = Zeroconf(context)
@@ -195,6 +195,7 @@ internal class BackgroundTaskController (private val context: Context): EventLis
             thread(name="AudioInput") {recorder?.start()}
         } catch (e: Exception) {
             log.d("Error starting mic audio: ${e.message.toString()}")
+            firebase.logException(e)
         }
     }
 
@@ -205,6 +206,7 @@ internal class BackgroundTaskController (private val context: Context): EventLis
             recorder = null
         } catch (e: Exception) {
             log.d("Error stopping input audio: ${e.message.toString()}")
+            firebase.logException(e)
         }
     }
 
@@ -224,6 +226,11 @@ internal class BackgroundTaskController (private val context: Context): EventLis
 
                 if (res >= config.wakeWordThreshold) {
                     log.i("Wake word detected at $res, theshold is ${config.wakeWordThreshold}")
+                    firebase.logEvent(FirebaseManager.WAKE_WORD_DETECTED, mapOf(
+                        "wake_word" to config.wakeWord,
+                        "threshold" to config.wakeWordThreshold.toString(),
+                        "prediction" to res.toString()
+                    ))
 
                     if (config.wakeWordSound != "none") {
                         WakeWordSoundPlayer(
@@ -240,6 +247,7 @@ internal class BackgroundTaskController (private val context: Context): EventLis
             }
         } catch (e: Exception) {
             log.d("Error processing to wake word engine: ${e.message.toString()}")
+            firebase.logException(e)
         }
     }
 
@@ -270,6 +278,7 @@ internal class BackgroundTaskController (private val context: Context): EventLis
             model = Model(context, modelRunner)
         } catch (e: Exception) {
             log.d("Error starting wake word detection: ${e.message.toString()}")
+            firebase.logException(e)
         }
     }
 
@@ -294,6 +303,7 @@ internal class BackgroundTaskController (private val context: Context): EventLis
             audioManager.setVolume(stream, volume)
         } catch (e: Exception) {
             log.d("Error setting volume: ${e.message.toString()}")
+            firebase.logException(e)
         }
     }
 

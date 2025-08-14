@@ -8,6 +8,8 @@ import android.os.Build.UNKNOWN
 import android.provider.Settings.Secure
 import androidx.preference.PreferenceManager
 import androidx.core.content.edit
+import com.google.firebase.Firebase
+import com.google.firebase.crashlytics.crashlytics
 import com.msp1974.vacompanion.utils.Event
 import com.msp1974.vacompanion.utils.EventNotifier
 import com.msp1974.vacompanion.utils.Logger
@@ -198,6 +200,7 @@ class APPConfig(val context: Context) {
         if (settings.has("diagnostics_enabled")) {
             diagnosticsEnabled = settings.getBoolean("diagnostics_enabled")
         }
+        Firebase.crashlytics.log("Settings update")
     }
 
     @SuppressLint("HardwareIds")
@@ -220,19 +223,21 @@ class APPConfig(val context: Context) {
 
     fun onSharedPreferenceChangedListener(prefs: SharedPreferences, key: String?) {
         val event = Event(key.toString(), "", "")
+        Firebase.crashlytics.log("${key.toString()} changed")
         eventBroadcaster.notifyEvent(event)
     }
 
     fun onValueChangedListener(property: KProperty<*>, oldValue: Any, newValue: Any) {
         if (oldValue != newValue) {
             val event = Event(property.name, oldValue, newValue)
+            Firebase.crashlytics.log("${property.name} changed from $oldValue to $newValue")
             eventBroadcaster.notifyEvent(event)
         }
     }
 
     companion object {
         const val NAME = "VACA"
-        const val VERSION = "0.3.4"
+        const val VERSION = "0.3.4-cl"
         const val SERVER_PORT = 10800
         const val DEFAULT_HA_HTTP_PORT = 8123
         const val DEFAULT_WAKE_WORD = "hey_jarvis"

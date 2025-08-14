@@ -12,6 +12,8 @@ import android.os.IBinder
 import androidx.core.app.ActivityCompat
 import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
+import com.google.firebase.Firebase
+import com.google.firebase.crashlytics.crashlytics
 import com.msp1974.vacompanion.MainActivity
 import com.msp1974.vacompanion.R
 import com.msp1974.vacompanion.settings.APPConfig
@@ -84,6 +86,7 @@ class VABackgroundService : Service() {
      * Main process for the service
      * */
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        Firebase.crashlytics.log("Background service starting")
         if (!checkIfPermissionIsGranted()) return START_NOT_STICKY
         if (!wifiLock!!.isHeld) {
             wifiLock!!.acquire()
@@ -93,6 +96,7 @@ class VABackgroundService : Service() {
         } catch (ex: Exception) {
             log.i("Disabling keyguard didn't work")
             ex.printStackTrace()
+            Firebase.crashlytics.recordException(ex)
         }
         backgroundTask = BackgroundTaskController(this)
         backgroundTask?.start()
@@ -102,6 +106,7 @@ class VABackgroundService : Service() {
         // TEST Launch Activity
         if (config.currentActivity == "") {
             log.i("Launching MainActivity from foreground service")
+            Firebase.crashlytics.log("Launching MainActivity from foreground service")
             val intent = Intent(this, MainActivity::class.java)
             intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
             startActivity(intent)
@@ -131,6 +136,7 @@ class VABackgroundService : Service() {
         } catch (ex: Exception) {
             log.i("Enabling keyguard didn't work")
             ex.printStackTrace()
+            Firebase.crashlytics.recordException(ex)
         }
     }
 

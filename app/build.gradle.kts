@@ -1,6 +1,8 @@
 plugins {
     alias(libs.plugins.androidApplication)
     alias(libs.plugins.kotlinAndroid)
+    id("com.google.gms.google-services")
+    id("com.google.firebase.crashlytics")
 }
 
 android {
@@ -12,7 +14,7 @@ android {
         minSdk = 26
         targetSdk = 36
         versionCode = 1
-        versionName = "0.3.4"
+        versionName = "0.3.4-cl"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         setProperty("archivesBaseName", "vaca-$versionName")
     }
@@ -49,4 +51,8 @@ dependencies {
     implementation ("androidx.preference:preference-ktx:1.2.0")
     implementation ("org.jetbrains.kotlinx:kotlinx-serialization-json:1.9.0")
     implementation ("com.squareup.okhttp3:okhttp:3.10.0")
+    implementation(platform("com.google.firebase:firebase-bom:34.1.0"))
+    implementation("com.google.firebase:firebase-analytics")
+    implementation("com.google.firebase:firebase-crashlytics-ndk")
+
 }
