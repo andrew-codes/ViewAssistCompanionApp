@@ -1,16 +1,39 @@
 package com.msp1974.vacompanion.utils
 
 import android.content.ContextWrapper
+import android.content.pm.ActivityInfo
 import android.os.PowerManager
 import android.provider.Settings
+import android.view.OrientationEventListener
 import android.view.View
 import androidx.appcompat.app.AppCompatActivity
+import com.google.firebase.Firebase
+import com.google.firebase.crashlytics.crashlytics
 import com.msp1974.vacompanion.settings.APPConfig
 
 class ScreenUtils(val activity: AppCompatActivity) : ContextWrapper(activity) {
     var log = Logger()
     var config = APPConfig.getInstance(activity.applicationContext)
     private var wakeLock: PowerManager.WakeLock? = null
+    private lateinit var orientationEventListener: OrientationEventListener
+
+    init {
+        //Orientation listener
+        orientationEventListener = object : OrientationEventListener(this) {
+            override fun onOrientationChanged(orientation: Int) {
+                if (orientation in (350..359) || orientation in (0..10) || orientation in (170..190)) {
+                    activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+                }
+                if (orientation in (80..110) || orientation in (260..280)) {
+                    activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+                }
+            }
+        }
+        if (orientationEventListener.canDetectOrientation()) {
+            orientationEventListener.enable()
+        }
+    }
+
 
     fun hideStatusAndActionBars() {
         val window = activity.window
@@ -77,6 +100,7 @@ class ScreenUtils(val activity: AppCompatActivity) : ContextWrapper(activity) {
             }
         } catch (e: SecurityException) {
             log.e("Error setting screen brightness mode: $e")
+            Firebase.crashlytics.recordException(e)
         }
     }
 
@@ -105,5 +129,9 @@ class ScreenUtils(val activity: AppCompatActivity) : ContextWrapper(activity) {
     fun isScreenOn(): Boolean {
         val pm = getSystemService(POWER_SERVICE) as PowerManager
         return pm.isInteractive
+    }
+
+    fun setScreenOrientation(orientation: Int) {
+        activity.requestedOrientation = orientation
     }
 }
