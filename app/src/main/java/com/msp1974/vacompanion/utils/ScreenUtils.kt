@@ -15,16 +15,25 @@ class ScreenUtils(val activity: AppCompatActivity) : ContextWrapper(activity) {
     var log = Logger()
     var config = APPConfig.getInstance(activity.applicationContext)
     private var wakeLock: PowerManager.WakeLock? = null
-    private lateinit var orientationEventListener: OrientationEventListener
+    private var orientationEventListener: OrientationEventListener
 
     init {
         //Orientation listener
+        // This exists as some devices do not call the onConfigurationChanged callback
+        // when orientation changes
+        // This seems functional on all devices
         orientationEventListener = object : OrientationEventListener(this) {
             override fun onOrientationChanged(orientation: Int) {
-                if (orientation in (350..359) || orientation in (0..10) || orientation in (170..190)) {
+                if (orientation in (320..359) || orientation in (0..40)) {
                     activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
                 }
-                if (orientation in (80..110) || orientation in (260..280)) {
+                if (orientation in (50..120)) {
+                    activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_REVERSE_LANDSCAPE
+                }
+                if (orientation in (130..220)) {
+                    activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_REVERSE_PORTRAIT
+                }
+                if (orientation in (230..310)) {
                     activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
                 }
             }
@@ -129,9 +138,5 @@ class ScreenUtils(val activity: AppCompatActivity) : ContextWrapper(activity) {
     fun isScreenOn(): Boolean {
         val pm = getSystemService(POWER_SERVICE) as PowerManager
         return pm.isInteractive
-    }
-
-    fun setScreenOrientation(orientation: Int) {
-        activity.requestedOrientation = orientation
     }
 }
