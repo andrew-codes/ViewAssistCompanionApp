@@ -74,11 +74,15 @@ class Sensors(val context: Context, val cbFunc: SensorUpdatesCallback) {
         }
     }
 
-    fun updateBoolSensorData(name: String, value: Boolean) {
+    fun updateBoolSensorData(name: String, value: Boolean?) {
         val lastValue = sensorLastValue[name] as Boolean?
+        var newValue = value
+        if (newValue == null) {
+            newValue = false
+        }
         if (value != lastValue) {
-            sensorData.put(name, value)
-            sensorLastValue.put(name, value)
+            sensorData.put(name, newValue)
+            sensorLastValue.put(name, newValue)
         }
     }
 
