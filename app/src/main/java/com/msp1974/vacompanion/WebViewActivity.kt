@@ -2,6 +2,7 @@ package com.msp1974.vacompanion
 
 import android.annotation.SuppressLint
 import android.app.UiModeManager
+import android.app.admin.DevicePolicyManager
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -99,7 +100,7 @@ public class WebViewActivity : AppCompatActivity(), SwipeRefreshLayout.OnRefresh
         config.eventBroadcaster.addListener(this)
 
         // Initiate broadcast receiver for action broadcasts
-        var satelliteBroadcastReceiver: BroadcastReceiver = object : BroadcastReceiver() {
+        val satelliteBroadcastReceiver: BroadcastReceiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context, intent: Intent) {
                 log.i("Handling broadcast in webview activity.  Event is ${intent.action}")
                 if (intent.action == BroadcastSender.SATELLITE_STOPPED) {
@@ -255,7 +256,7 @@ public class WebViewActivity : AppCompatActivity(), SwipeRefreshLayout.OnRefresh
                         finish()
                     }
                     firebase.addToCrashLog("Render process gone: ${detail.toString()}")
-                    firebase.logEvent ("render_process_gone",mapOf("detail" to detail.toString()))
+                    firebase.logEvent (FirebaseManager.RENDER_PROCESS_GONE,mapOf("detail" to detail.toString()))
                     return super.onRenderProcessGone(view, detail)
                 }
 
