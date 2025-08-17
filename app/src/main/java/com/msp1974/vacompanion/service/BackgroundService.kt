@@ -118,10 +118,7 @@ class VABackgroundService : Service() {
     private fun checkIfPermissionIsGranted() = ActivityCompat.checkSelfPermission(
         this,
         Manifest.permission.RECORD_AUDIO
-    ) == PackageManager.PERMISSION_GRANTED /*&& ActivityCompat.checkSelfPermission(
-        this,
-        Manifest.permission.ACCESS_COARSE_LOCATION
-    ) == PackageManager.PERMISSION_GRANTED*/
+    ) == PackageManager.PERMISSION_GRANTED
 
     override fun onDestroy() {
         log.i("Stopping Background Service")
