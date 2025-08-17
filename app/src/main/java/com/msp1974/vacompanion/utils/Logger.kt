@@ -40,6 +40,7 @@ class FirebaseManager {
 
         const val DIAGNOSTIC_POPUP_SHOWN = "diagnostic_popup_shown"
         const val WAKE_WORD_DETECTED = "wake_word_detected"
+        const val SATELLITE_ALREADY_RUNNING_MAIN = "satellite_already_running_main"
     }
 
     fun Map<String, Any?>.toBundle(): Bundle = bundleOf(*this.toList().toTypedArray())

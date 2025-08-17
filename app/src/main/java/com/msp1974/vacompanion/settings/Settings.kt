@@ -52,6 +52,7 @@ class APPConfig(val context: Context) {
 
     var hasRecordAudioPermission: Boolean = true
     var hasPostNotificationPermission: Boolean = true
+    var hasWriteExternalStoragePermission: Boolean = true
 
     //In memory settings with change notification
     var wakeWord: String by Delegates.observable(DEFAULT_WAKE_WORD) { property, oldValue, newValue ->
@@ -251,6 +252,7 @@ class APPConfig(val context: Context) {
         const val DEFAULT_DUCKING_VOLUME = 0.1f
         const val DEFAULT_MUTE = false
         const val DEFAULT_MIC_GAIN = 0
+        const val GITHUB_API_URL = "https://api.github.com/repos/msp1974/ViewAssist_Companion_App/releases/latest"
 
         @Volatile
         private var instance: APPConfig? = null
