@@ -9,6 +9,7 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.graphics.Bitmap
 import android.graphics.Color
+import android.net.http.SslError
 import android.os.Build
 import android.os.Bundle
 import android.os.StrictMode
@@ -18,6 +19,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
 import android.webkit.RenderProcessGoneDetail
+import android.webkit.SslErrorHandler
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -280,6 +282,13 @@ public class WebViewActivity : AppCompatActivity(), SwipeRefreshLayout.OnRefresh
                         }
                     }
                     return true
+                }
+
+                // Added to accept self signed certs
+                @SuppressLint("WebViewClientOnReceivedSslError")
+                override fun onReceivedSslError(view: WebView, handler: SslErrorHandler, error: SslError) {
+                    log.e("SSL Error: $error - asking handler to ignore and proceed")
+                    handler.proceed()
                 }
             })
 
