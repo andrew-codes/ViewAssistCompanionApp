@@ -19,12 +19,13 @@ import kotlin.properties.Delegates
 import kotlin.reflect.KProperty
 
 class APPConfig(val context: Context) {
-    val sharedPrefs = PreferenceManager.getDefaultSharedPreferences(context.applicationContext)
+    private val sharedPrefs = PreferenceManager.getDefaultSharedPreferences(context.applicationContext)
     private val log = Logger()
     var eventBroadcaster: EventNotifier
+    private var prefListener: Unit
 
     init {
-        sharedPrefs.registerOnSharedPreferenceChangeListener { prefs, key ->
+        prefListener = sharedPrefs.registerOnSharedPreferenceChangeListener { prefs, key ->
             onSharedPreferenceChangedListener(prefs, key)
         }
         eventBroadcaster = EventNotifier()
@@ -117,6 +118,15 @@ class APPConfig(val context: Context) {
         onValueChangedListener(property, oldValue, newValue)
     }
 
+    var integrationVersion: String by Delegates.observable("0.0.0") { property, oldValue, newValue ->
+        onValueChangedListener(property, oldValue, newValue)
+    }
+
+    var pairedDeviceID: String by Delegates.observable("") { property, oldValue, newValue ->
+        pairedDeviceId = newValue
+        onValueChangedListener(property, oldValue, newValue)
+    }
+
     // SharedPreferences
     var canSetScreenWritePermission: Boolean
         get() = this.sharedPrefs.getBoolean("can_set_screen_write_permission", true)
@@ -142,7 +152,7 @@ class APPConfig(val context: Context) {
         get() = this.sharedPrefs.getLong("token_expiry", 0)
         set(value) = this.sharedPrefs.edit { putLong("token_expiry", value) }
 
-    var pairedDeviceID: String
+    private var pairedDeviceId: String
         get() = this.sharedPrefs.getString("paired_device_id", "") ?: ""
         set(value) = this.sharedPrefs.edit { putString("paired_device_id", value) }
 
@@ -207,6 +217,9 @@ class APPConfig(val context: Context) {
         if (settings.has("diagnostics_enabled")) {
             diagnosticsEnabled = settings.getBoolean("diagnostics_enabled")
         }
+        if (settings.has("integration_version")) {
+            integrationVersion = settings.getString("integration_version")
+        }
         Firebase.crashlytics.log("Settings update")
     }
 
@@ -229,6 +242,7 @@ class APPConfig(val context: Context) {
     }
 
     fun onSharedPreferenceChangedListener(prefs: SharedPreferences, key: String?) {
+        log.d("SharedPreference changed: $key")
         val event = Event(key.toString(), "", "")
         Firebase.crashlytics.log("${key.toString()} changed")
         eventBroadcaster.notifyEvent(event)

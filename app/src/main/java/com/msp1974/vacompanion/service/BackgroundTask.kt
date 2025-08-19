@@ -130,7 +130,7 @@ internal class BackgroundTaskController (private val context: Context): EventLis
                 log.i("BackgroundTask - doNotDisturb changed to ${event.newValue}")
                 setDoNotDisturb(event.newValue as Boolean)
             }
-            "paired_device_id" -> {
+            "pairedDeviceID" -> {
                 if (config.pairedDeviceID != "") {
                     log.d("Device paired, stopping Zeroconf")
                     zeroConf.unregisterService()
