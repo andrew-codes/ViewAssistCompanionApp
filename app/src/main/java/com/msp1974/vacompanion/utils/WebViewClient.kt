@@ -7,16 +7,11 @@ import android.graphics.Bitmap
 import android.net.http.SslError
 import android.webkit.RenderProcessGoneDetail
 import android.webkit.SslErrorHandler
-import android.webkit.WebResourceError
-import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
-import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import com.msp1974.vacompanion.R
-import com.msp1974.vacompanion.jsinterface.WebAppInterface
-import com.msp1974.vacompanion.jsinterface.WebViewJavascriptInterface
 import com.msp1974.vacompanion.settings.APPConfig
 
 interface WebClientCallback {
@@ -122,16 +117,16 @@ open class InternalWebViewClient(val config: APPConfig, val resources: Resources
             alertDialog.apply {
                 setTitle(resources.getString(R.string.dialog_title_ssl_error))
                 setMessage(message)
-                setPositiveButton("Ignore") { _: DialogInterface?, _: Int ->
+                setPositiveButton(resources.getString(R.string.dialog_button_yes)) { _: DialogInterface?, _: Int ->
                     handler.proceed()
                     config.ignoreSSLErrors = true
                 }
-                setNeutralButton("Always Ignore") { _: DialogInterface?, _: Int ->
+                setNeutralButton(resources.getString(R.string.dialog_button_always_yes)) { _: DialogInterface?, _: Int ->
                     config.ignoreSSLErrors = true
                     config.alwaysIgnoreSSLErrors = true
                     handler.proceed()
                 }
-                setNegativeButton("Abort") { _: DialogInterface?, _: Int ->
+                setNegativeButton(resources.getString(R.string.dialog_button_no)) { _: DialogInterface?, _: Int ->
                     super.onReceivedSslError(view, handler, error)
                     view.loadUrl("file:///android_asset/web/error.html")
                 }

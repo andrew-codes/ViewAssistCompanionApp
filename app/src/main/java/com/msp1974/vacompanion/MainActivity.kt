@@ -38,7 +38,6 @@ import com.msp1974.vacompanion.utils.Logger
 import com.msp1974.vacompanion.utils.ScreenUtils
 import com.msp1974.vacompanion.utils.Updater
 import kotlin.concurrent.thread
-import kotlin.reflect.typeOf
 
 
 class MainActivity : AppCompatActivity() {
@@ -377,7 +376,6 @@ class MainActivity : AppCompatActivity() {
         } else {
             log.d("Write settings permission ${if (!config.canSetScreenWritePermission) "not required" else "already granted"}")
             checkAndRequestNotificationAccessPolicyPermission()
-            //initialise()
         }
     }
 
