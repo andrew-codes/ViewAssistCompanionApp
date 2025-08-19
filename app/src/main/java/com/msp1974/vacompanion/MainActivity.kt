@@ -49,7 +49,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var screen: ScreenUtils
     private lateinit var updater: Updater
     private var screenOrientation: Int = 0
-    private var updateProcessComplete: Boolean = false
+    private var updateProcessComplete: Boolean = true
 
     @SuppressLint("HardwareIds", "SetTextI18n")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -148,7 +148,8 @@ class MainActivity : AppCompatActivity() {
 
         findViewById<TextView>(R.id.ip).text = Helpers.getIpv4HostAddress()
 
-        if (config.hasWriteExternalStoragePermission) {
+        if (APPConfig.ENABLE_UPDATER && config.hasWriteExternalStoragePermission) {
+            updateProcessComplete = false
             findViewById<TextView>(R.id.status_message).text = "Checking for updates..."
             thread(name = "Updater thread") {
                 updateHandler()

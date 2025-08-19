@@ -259,6 +259,7 @@ class APPConfig(val context: Context) {
         const val DEFAULT_MUTE = false
         const val DEFAULT_MIC_GAIN = 0
         const val GITHUB_API_URL = "https://api.github.com/repos/msp1974/ViewAssist_Companion_App/releases/latest"
+        const val ENABLE_UPDATER = false
 
         @Volatile
         private var instance: APPConfig? = null
