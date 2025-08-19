@@ -4,8 +4,6 @@ import android.app.Activity
 import android.app.DownloadManager
 import android.content.Context
 import android.database.Cursor
-import android.media.MediaScannerConnection
-import android.media.MediaScannerConnection.OnScanCompletedListener
 import android.net.Uri
 import android.os.Environment
 import android.os.Handler
@@ -21,7 +19,6 @@ import kotlinx.serialization.json.put
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.File
-import java.net.URI
 import kotlin.math.max
 
 
