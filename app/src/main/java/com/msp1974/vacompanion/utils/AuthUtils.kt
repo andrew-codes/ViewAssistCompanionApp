@@ -1,12 +1,17 @@
 package com.msp1974.vacompanion.utils
 
+import android.annotation.SuppressLint
 import android.net.Uri
-import kotlin.random.Random
 import androidx.core.net.toUri
 import okhttp3.FormBody
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONObject
+import javax.net.ssl.SSLContext
+import javax.net.ssl.TrustManager
+import javax.net.ssl.X509TrustManager
+import javax.security.cert.X509Certificate
+import kotlin.random.Random
 
 data class AuthToken(val tokenType: String = "", val accessToken: String = "", val expires: Long = 0, val refreshToken: String = "")
 
@@ -88,7 +93,7 @@ class AuthUtils {
             }
         }
 
-        fun authoriseWithAuthCode(baseUrl: String, authCode: String): AuthToken {
+        fun authoriseWithAuthCode(baseUrl: String, authCode: String, verifySSL: Boolean = true): AuthToken {
             val url: String = getTokenUrl(baseUrl)
             val map: HashMap<String, String> = hashMapOf(
                 "grant_type" to "authorization_code",
@@ -96,7 +101,7 @@ class AuthUtils {
                 "code" to authCode
             )
 
-            val response = httpPOST(url, map)
+            val response = httpPOST(url, map, verifySSL)
             try {
                 val json = JSONObject(response)
                 val expiresIn = System.currentTimeMillis() + (json.getString("expires_in").toInt() * 1000)
@@ -114,14 +119,14 @@ class AuthUtils {
             }
         }
 
-        fun refreshAccessToken(host: String, refreshToken: String): AuthToken {
+        fun refreshAccessToken(host: String, refreshToken: String, verifySSL: Boolean = true): AuthToken {
             val url: String = getTokenUrl(host)
             val map: HashMap<String, String> = hashMapOf(
                 "grant_type" to "refresh_token",
                 "client_id" to getClientId(),
                 "refresh_token" to refreshToken
             )
-            val response = httpPOST(url, map)
+            val response = httpPOST(url, map, verifySSL)
             try {
                 val json = JSONObject(response)
                 val expiresIn = System.currentTimeMillis() + (json.getString("expires_in").toInt() * 1000)
@@ -139,10 +144,23 @@ class AuthUtils {
 
         }
 
-        fun httpPOST(url: String, parameters: HashMap<String, String>): String {
-            var client = OkHttpClient()
+        fun httpPOST(url: String, parameters: HashMap<String, String>, verifySSL: Boolean = true): String {
+            val clientBuilder = OkHttpClient.Builder()
             val builder = FormBody.Builder()
             val it = parameters.entries.iterator()
+
+            if (!verifySSL) {
+                val sslContext = SSLContext.getInstance("SSL")
+                sslContext.init(null, trustAllCerts, java.security.SecureRandom())
+                clientBuilder.sslSocketFactory(
+                    sslContext.socketFactory,
+                    trustAllCerts[0] as X509TrustManager
+                )
+                clientBuilder.hostnameVerifier { hostname, session -> true }
+            }
+            val client = clientBuilder.build()
+
+
             while (it.hasNext()) {
                 val pair = it.next() as Map.Entry<*, *>
                 builder.add(pair.key.toString(), pair.value.toString())
@@ -154,18 +172,37 @@ class AuthUtils {
                 .post(formBody)
                 .build()
 
-            client.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) {
-                    log.e("Unexpected code $response")
-                    return ""
-                }
-                try {
+            try {
+                client.newCall(request).execute().use { response ->
+                    if (!response.isSuccessful) {
+                        log.e("Unexpected code $response")
+                        return ""
+                    }
                     return response.body()?.string().toString()
-                } catch (e: Exception) {
-                    log.e(e.message.toString())
-                    return ""
                 }
+            } catch (e: Exception) {
+                log.e(e.message.toString())
+                return ""
             }
         }
+
+        val trustAllCerts = arrayOf<TrustManager>(@SuppressLint("CustomX509TrustManager")
+        object : X509TrustManager {
+            @SuppressLint("TrustAllX509TrustManager")
+            override fun checkClientTrusted(
+                chain: Array<out java.security.cert.X509Certificate?>?,
+                authType: String?
+            ) {}
+
+            @SuppressLint("TrustAllX509TrustManager")
+            override fun checkServerTrusted(
+                chain: Array<out java.security.cert.X509Certificate?>?,
+                authType: String?
+            ) {}
+
+            override fun getAcceptedIssuers(): Array<java.security.cert.X509Certificate?> {
+                return arrayOf<java.security.cert.X509Certificate?>()
+            }
+        })
     }
 }

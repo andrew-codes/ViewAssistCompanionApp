@@ -1,6 +1,7 @@
 package com.msp1974.vacompanion
 
 import android.annotation.SuppressLint
+import android.app.PendingIntent.getActivity
 import android.app.UiModeManager
 import android.app.admin.DevicePolicyManager
 import android.content.BroadcastReceiver
@@ -20,11 +21,14 @@ import android.view.ViewGroup
 import android.view.WindowManager
 import android.webkit.RenderProcessGoneDetail
 import android.webkit.SslErrorHandler
+import android.webkit.WebResourceError
+import android.webkit.WebResourceRequest
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.PopupWindow
 import android.widget.TextView
+import android.widget.Toast
 import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AppCompatDelegate
@@ -45,9 +49,12 @@ import com.msp1974.vacompanion.utils.ScreenUtils
 import androidx.core.graphics.drawable.toDrawable
 import com.google.android.material.snackbar.Snackbar
 import com.msp1974.vacompanion.utils.FirebaseManager
+import com.msp1974.vacompanion.utils.InternalWebViewClient
+import com.msp1974.vacompanion.utils.WebClientCallback
 import kotlin.math.abs
 
-public class WebViewActivity : AppCompatActivity(), SwipeRefreshLayout.OnRefreshListener, EventListener {
+public class WebViewActivity : AppCompatActivity(), SwipeRefreshLayout.OnRefreshListener, EventListener,
+    WebClientCallback {
     private var log = Logger()
     private val firebase = FirebaseManager.getInstance()
     private lateinit var config: APPConfig
@@ -233,64 +240,7 @@ public class WebViewActivity : AppCompatActivity(), SwipeRefreshLayout.OnRefresh
                 "externalApp"
             )
 
-            view.setWebViewClient(object : WebViewClient() {
-                override fun onPageStarted(view: WebView, url: String, favicon: Bitmap?) {
-                    super.onPageStarted(view, url, favicon)
-                    val swipe = view.parent as SwipeRefreshLayout
-                    swipe.isRefreshing = true
-                }
-
-                override fun onPageFinished(view: WebView, url: String) {
-                    val swipe = view.parent as SwipeRefreshLayout
-                    swipe.isRefreshing = false
-                    showDiagnosticsPopup(config.diagnosticsEnabled)
-                }
-
-                override fun onRenderProcessGone(
-                    view: WebView,
-                    detail: RenderProcessGoneDetail?
-                ): Boolean {
-                    log.e("Webview render process gone: $detail")
-                    if (webView!! == view && detail?.didCrash() == true) {
-                        swipeRefreshLayout!!.removeAllViews()
-                        view.removeAllViews()
-                        view.destroy()
-                        finish()
-                    }
-                    firebase.addToCrashLog("Render process gone: ${detail.toString()}")
-                    firebase.logEvent (FirebaseManager.RENDER_PROCESS_GONE,mapOf("detail" to detail.toString()))
-                    return super.onRenderProcessGone(view, detail)
-                }
-
-                override fun shouldOverrideUrlLoading(view: WebView, url: String): Boolean {
-                    // If the url is our client id then capture the auth code and get an access token
-                    if (url.contains(AuthUtils.CLIENT_URL)) {
-                        val authCode = AuthUtils.getReturnAuthCode(url)
-                        if (authCode != "") {
-                            // Get access token using auth token
-                            val auth = AuthUtils.authoriseWithAuthCode(getHAUrl(), authCode)
-                            if (auth.accessToken == "") {
-                                // Not authorised.  Send back to login screen
-                                view.loadUrl(AuthUtils.getAuthUrl(getHAUrl()))
-                            } else {
-                                // Authorised. Load HA default dashboard
-                                config.accessToken = auth.accessToken
-                                config.refreshToken = auth.refreshToken
-                                config.tokenExpiry = auth.expires
-                                view.loadUrl(AuthUtils.getURL(getHAUrl()))
-                            }
-                        }
-                    }
-                    return true
-                }
-
-                // Added to accept self signed certs
-                @SuppressLint("WebViewClientOnReceivedSslError")
-                override fun onReceivedSslError(view: WebView, handler: SslErrorHandler, error: SslError) {
-                    log.e("SSL Error: $error - asking handler to ignore and proceed")
-                    handler.proceed()
-                }
-            })
+            view.webViewClient = InternalWebViewClient(config, resources, this)
 
             view.settings.apply {
                 javaScriptEnabled = true
@@ -349,7 +299,8 @@ public class WebViewActivity : AppCompatActivity(), SwipeRefreshLayout.OnRefresh
             log.i("Auth token has expired.  Requesting new token using refresh token")
             val auth = AuthUtils.refreshAccessToken(
                 getHAUrl(),
-                config.refreshToken
+                config.refreshToken,
+                config.ignoreSSLErrors
             )
             if (auth.accessToken != "" && auth.expires > System.currentTimeMillis()) {
                 log.d("Received new auth token")
@@ -393,7 +344,7 @@ public class WebViewActivity : AppCompatActivity(), SwipeRefreshLayout.OnRefresh
         if (!screen.isScreenOn() || !config.backgroundTaskRunning) {
             config.eventBroadcaster.removeListener(this)
             screen.setDeviceBrightnessMode(true)
-            finish()
+            finishActivity()
         }
         super.onResume()
         // Keep screen on
@@ -461,8 +412,12 @@ public class WebViewActivity : AppCompatActivity(), SwipeRefreshLayout.OnRefresh
         }
     }
 
+    override fun finishActivity() {
+        finish()
+    }
 
-    fun showDiagnosticsPopup(show: Boolean) {
+
+    override fun showDiagnosticsPopup(show: Boolean) {
         if (show) {
             try {
                 if (popup == null) {

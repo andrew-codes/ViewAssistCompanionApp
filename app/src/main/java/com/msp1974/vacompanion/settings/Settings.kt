@@ -54,6 +54,8 @@ class APPConfig(val context: Context) {
     var hasPostNotificationPermission: Boolean = true
     var hasWriteExternalStoragePermission: Boolean = true
 
+    var ignoreSSLErrors: Boolean = alwaysIgnoreSSLErrors
+
     //In memory settings with change notification
     var wakeWord: String by Delegates.observable(DEFAULT_WAKE_WORD) { property, oldValue, newValue ->
         onValueChangedListener(property, oldValue, newValue)
@@ -143,6 +145,10 @@ class APPConfig(val context: Context) {
     var pairedDeviceID: String
         get() = this.sharedPrefs.getString("paired_device_id", "") ?: ""
         set(value) = this.sharedPrefs.edit { putString("paired_device_id", value) }
+
+    var alwaysIgnoreSSLErrors: Boolean
+        get() = this.sharedPrefs.getBoolean("always_ignore_ssl_errors", false)
+        set(value) = this.sharedPrefs.edit { putBoolean("always_ignore_ssl_errors", value) }
 
     fun processSettings(settingString: String) {
         initSettings = true
