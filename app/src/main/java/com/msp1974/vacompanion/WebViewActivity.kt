@@ -300,7 +300,7 @@ public class WebViewActivity : AppCompatActivity(), SwipeRefreshLayout.OnRefresh
             val auth = AuthUtils.refreshAccessToken(
                 getHAUrl(),
                 config.refreshToken,
-                config.ignoreSSLErrors
+                !config.ignoreSSLErrors
             )
             if (auth.accessToken != "" && auth.expires > System.currentTimeMillis()) {
                 log.d("Received new auth token")

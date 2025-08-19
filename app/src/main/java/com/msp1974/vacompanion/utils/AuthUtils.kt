@@ -181,7 +181,7 @@ class AuthUtils {
                     return response.body()?.string().toString()
                 }
             } catch (e: Exception) {
-                log.e(e.message.toString())
+                log.e("Error authorising with HA: ${e.message.toString()}")
                 return ""
             }
         }

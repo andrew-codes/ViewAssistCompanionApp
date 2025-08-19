@@ -72,7 +72,7 @@ open class InternalWebViewClient(val config: APPConfig, val resources: Resources
             val authCode = AuthUtils.getReturnAuthCode(url)
             if (authCode != "") {
                 // Get access token using auth token
-                val auth = AuthUtils.authoriseWithAuthCode(getHAUrl(), authCode, config.ignoreSSLErrors)
+                val auth = AuthUtils.authoriseWithAuthCode(getHAUrl(), authCode, !config.ignoreSSLErrors)
                 if (auth.accessToken == "") {
                     // Not authorised.  Send back to login screen
                     view.loadUrl(AuthUtils.getAuthUrl(getHAUrl()))
