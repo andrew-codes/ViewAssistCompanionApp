@@ -14,6 +14,7 @@ class BroadcastSender {
         internal const val SATELLITE_STOPPED = "SATELLITE_STOPPED"
         internal const val TOAST_MESSAGE = "TOAST_MESSAGE"
         internal const val REFRESH = "REFRESH"
+        internal const val VERSION_MISMATCH = "VERSION_MISMATCH"
 
 
         fun sendBroadcast(context: Context, action: String, extra: String? = null) {

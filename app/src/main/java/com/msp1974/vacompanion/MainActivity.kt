@@ -18,6 +18,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
+import android.view.View
 import android.widget.ImageView
 import android.widget.TextView
 import androidx.activity.enableEdgeToEdge
@@ -37,6 +38,7 @@ import com.msp1974.vacompanion.utils.Helpers
 import com.msp1974.vacompanion.utils.Logger
 import com.msp1974.vacompanion.utils.ScreenUtils
 import com.msp1974.vacompanion.utils.Updater
+import io.github.z4kn4fein.semver.toVersion
 import kotlin.concurrent.thread
 
 
@@ -84,6 +86,7 @@ class MainActivity : AppCompatActivity() {
         val uuid = findViewById<TextView>(R.id.uuid)
         val pairedDevice = findViewById<TextView>(R.id.paired_with)
         val startOnBoot = findViewById<SwitchCompat>(R.id.startOnBoot)
+        val updateButton = findViewById<TextView>(R.id.btnUpdate)
 
         setScreenLayout()
 
@@ -113,6 +116,10 @@ class MainActivity : AppCompatActivity() {
             false
         }
 
+        updateButton.setOnClickListener {
+            runUpdateRoutine()
+        }
+
         startOnBoot.setChecked(config.startOnBoot)
         startOnBoot.setOnCheckedChangeListener({ _, isChecked ->
             config.startOnBoot = isChecked
@@ -131,13 +138,13 @@ class MainActivity : AppCompatActivity() {
 
     fun initialise() {
         if (!hasPermissions()) {
-            findViewById<TextView>(R.id.status_message).text = "No permissions"
+            setStatus("No permissions")
             return
         }
         var hasNetwork = Helpers.isNetworkAvailable(this)
         if (!this.hasWindowFocus() || !hasNetwork) {
             if (!hasNetwork) {
-                findViewById<TextView>(R.id.status_message).text = "Waiting for network..."
+                setStatus("Waiting for network...")
             }
             Handler(Looper.getMainLooper()).postDelayed({
                 initialise()
@@ -146,15 +153,6 @@ class MainActivity : AppCompatActivity() {
         }
 
         findViewById<TextView>(R.id.ip).text = Helpers.getIpv4HostAddress()
-
-        if (APPConfig.ENABLE_UPDATER && config.hasWriteExternalStoragePermission) {
-            updateProcessComplete = false
-            findViewById<TextView>(R.id.status_message).text = "Checking for updates..."
-            thread(name = "Updater thread") {
-                updateHandler()
-            }
-        }
-
 
         // Initiate wake word broadcast receiver
         val satelliteBroadcastReceiver: BroadcastReceiver = object : BroadcastReceiver() {
@@ -165,19 +163,40 @@ class MainActivity : AppCompatActivity() {
                             runWebViewIntent()
                         }
                     }
+                    BroadcastSender.VERSION_MISMATCH -> {
+                        runUpdateRoutine()
+                    }
                 }
 
             }
         }
         val filter = IntentFilter().apply {
             addAction(BroadcastSender.SATELLITE_STARTED)
-            addAction(DownloadManager.ACTION_DOWNLOAD_COMPLETE)
+            addAction(BroadcastSender.VERSION_MISMATCH)
         }
         LocalBroadcastManager.getInstance(this)
             .registerReceiver(satelliteBroadcastReceiver, filter)
 
         // Start background tasks
         runBackgroundTasks()
+    }
+
+    fun setStatus(status: String) {
+        runOnUiThread {
+            findViewById<TextView>(R.id.status_message).text = status
+        }
+    }
+
+    fun runUpdateRoutine() {
+        if (APPConfig.ENABLE_UPDATER && config.hasWriteExternalStoragePermission && updateProcessComplete) {
+            updateProcessComplete = false
+            setStatus("Checking for updates...")
+            thread(name = "Updater thread") {
+                updateHandler()
+            }
+        } else {
+            setStatus("App update to v${config.minRequiredApkVersion} required...")
+        }
     }
 
     fun setScreenLayout() {
@@ -208,6 +227,14 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         log.d("Main Activity resumed")
+
+        // Show/hide update button
+        if (config.version.toVersion() < config.minRequiredApkVersion.toVersion()) {
+            findViewById<TextView>(R.id.btnUpdate).visibility = View.VISIBLE
+        } else {
+            findViewById<TextView>(R.id.btnUpdate).visibility = View.INVISIBLE
+        }
+
         if (screen.isScreenOn() && config.isRunning) {
             log.d("Resuming webView activity")
             firebase.logEvent(FirebaseManager.SATELLITE_ALREADY_RUNNING_MAIN, mapOf())
@@ -238,7 +265,7 @@ class MainActivity : AppCompatActivity() {
     private fun runBackgroundTasks() {
         if ( config.backgroundTaskRunning ) {
             log.w("Background task already running.  Not starting from MainActivity")
-            firebase.logEvent("main_activity_background_task_already_running", mapOf())
+            firebase.logEvent(FirebaseManager.MAIN_ACTIVITY_BACKGROUND_TASK_ALREADY_RUNNING, mapOf())
             return
         }
         if (!updateProcessComplete) {
@@ -248,7 +275,7 @@ class MainActivity : AppCompatActivity() {
             return
         }
         log.d("Starting background tasks")
-        findViewById<TextView>(R.id.status_message).text = "Waiting for connection..."
+        setStatus("Waiting for connection...")
         val serviceIntent = Intent(this.applicationContext, VABackgroundService::class.java)
         startService(serviceIntent)
     }
@@ -411,28 +438,23 @@ class MainActivity : AppCompatActivity() {
 
     private fun updateHandler() {
         Looper.prepare()
-        val u = updater.isUpdateAvailable()
-        if (u) {
-            log.d("Update available $u - ${updater.latestRelease.downloadURL}")
+        if (updater.isUpdateAvailable(config.minRequiredApkVersion)) {
+            log.d("Update available - ${updater.latestRelease.downloadURL}")
             runOnUiThread {
                 val updateDialog = AlertDialog.Builder(this)
                 updateDialog.apply {
-                    setTitle("New VACA App version")
-                    setMessage("There is a new version of VACA available.  Click to install.")
-                    setPositiveButton("Install") { _: DialogInterface?, _: Int ->
+                    setCancelable(false)
+                    setTitle("Update Required")
+                    setMessage("You require version ${config.minRequiredApkVersion} of this app to connect to your server. Do you wish to download and install this version now?")
+                    setPositiveButton("Yes") { _: DialogInterface?, _: Int ->
                         log.d("Install requested")
-                        findViewById<TextView>(R.id.status_message).text = "Downloading update..."
+                        setStatus("Downloading update...")
                         updater.requestDownload { uri ->
                             if (uri != "") {
                                 log.d("Download complete = $uri")
-                                findViewById<TextView>(R.id.status_message).text =
-                                    "Installing update..."
+                                setStatus("Installing update...")
                                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                                     val intent = Intent(Intent.ACTION_INSTALL_PACKAGE)
-                                    //val content = FileProvider.getUriForFile(context, context.applicationContext.packageName + ".provider",
-                                    //    File(uri)
-                                    //)
-                                    //log.d("Content = $content")
                                     intent.setData(uri.toUri())
                                     intent.setFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                                     onUpdateAppActivityResult.launch(intent)
@@ -440,7 +462,6 @@ class MainActivity : AppCompatActivity() {
                                     val intent = Intent(Intent.ACTION_VIEW)
                                     intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                                     intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                    //output file is the apk downloaded earlier
                                     intent.setDataAndType(
                                         uri.toUri(),
                                         "application/vnd.android.package-archive"
@@ -458,18 +479,22 @@ class MainActivity : AppCompatActivity() {
                             }
                         }
                     }
-                    setNegativeButton("Remind me later") { _: DialogInterface?, _: Int ->
+                    setNegativeButton("No thanks") { _: DialogInterface?, _: Int ->
                         updateProcessComplete = true
+                        setStatus("Incompatible version. Please update")
+                        findViewById<TextView>(R.id.btnUpdate).visibility = View.VISIBLE
                     }
                 }.create().show()
             }
         } else {
             updateProcessComplete = true
+            setStatus("Incompatible version. In app update not available")
         }
     }
 
     private val onUpdateAppActivityResult = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
         updateProcessComplete = true
+        setStatus("Incompatible version. In app update not available")
     }
 }
 

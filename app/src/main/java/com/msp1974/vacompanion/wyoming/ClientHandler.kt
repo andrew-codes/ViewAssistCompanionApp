@@ -14,6 +14,7 @@ import com.msp1974.vacompanion.broadcasts.BroadcastSender
 import com.msp1974.vacompanion.settings.APPConfig
 import com.msp1974.vacompanion.utils.DeviceCapabilitiesManager
 import com.msp1974.vacompanion.utils.Logger
+import io.github.z4kn4fein.semver.toVersion
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -107,6 +108,13 @@ class ClientHandler(private val context: Context, private val server: WyomingTCP
     }
 
     private fun startSatellite() {
+
+        if (config.version.toVersion() < config.minRequiredApkVersion.toVersion()) {
+            log.d("App update needed. App is ${config.version}, Integration is ${config.integrationVersion}")
+            BroadcastSender.sendBroadcast(context, BroadcastSender.VERSION_MISMATCH)
+            return
+        }
+
         if (config.pairedDeviceID == "") {
             config.pairedDeviceID = connectionID
         }

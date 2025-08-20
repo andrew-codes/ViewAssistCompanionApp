@@ -3,11 +3,13 @@ package com.msp1974.vacompanion.settings
 import android.annotation.SuppressLint
 import android.content.Context
 import android.content.SharedPreferences
+import android.content.pm.PackageInfo
 import android.os.Build
 import android.os.Build.UNKNOWN
 import android.provider.Settings.Secure
 import androidx.preference.PreferenceManager
 import androidx.core.content.edit
+import com.google.android.gms.common.util.ClientLibraryUtils.getPackageInfo
 import com.google.firebase.Firebase
 import com.google.firebase.crashlytics.crashlytics
 import com.msp1974.vacompanion.utils.Event
@@ -33,8 +35,13 @@ class APPConfig(val context: Context) {
 
     // Constant values
     val name = NAME
-    val version = VERSION
+    val version = getPackageInfo(context, context.packageName)?.versionName.toString()
     val serverPort = SERVER_PORT
+
+    // Versions
+    var integrationVersion: String = "0.0.0"
+    var minRequiredApkVersion: String = version
+
 
     // In memory only settings
     var initSettings: Boolean = false
@@ -115,10 +122,6 @@ class APPConfig(val context: Context) {
     }
 
     var diagnosticsEnabled: Boolean by Delegates.observable(false) { property, oldValue, newValue ->
-        onValueChangedListener(property, oldValue, newValue)
-    }
-
-    var integrationVersion: String by Delegates.observable("0.0.0") { property, oldValue, newValue ->
         onValueChangedListener(property, oldValue, newValue)
     }
 
@@ -220,6 +223,9 @@ class APPConfig(val context: Context) {
         if (settings.has("integration_version")) {
             integrationVersion = settings.getString("integration_version")
         }
+        if (settings.has("min_required_apk_version")) {
+            minRequiredApkVersion = settings.getString("min_required_apk_version")
+        }
         Firebase.crashlytics.log("Settings update")
     }
 
@@ -258,7 +264,6 @@ class APPConfig(val context: Context) {
 
     companion object {
         const val NAME = "VACA"
-        const val VERSION = "0.3.5b0"
         const val SERVER_PORT = 10800
         const val DEFAULT_HA_HTTP_PORT = 8123
         const val DEFAULT_WAKE_WORD = "hey_jarvis"
@@ -272,8 +277,8 @@ class APPConfig(val context: Context) {
         const val DEFAULT_DUCKING_VOLUME = 0.1f
         const val DEFAULT_MUTE = false
         const val DEFAULT_MIC_GAIN = 0
-        const val GITHUB_API_URL = "https://api.github.com/repos/msp1974/ViewAssist_Companion_App/releases/latest"
-        const val ENABLE_UPDATER = false
+        const val GITHUB_API_URL = "https://api.github.com/repos/msp1974/ViewAssist_Companion_App/releases"
+        const val ENABLE_UPDATER = true
 
         @Volatile
         private var instance: APPConfig? = null

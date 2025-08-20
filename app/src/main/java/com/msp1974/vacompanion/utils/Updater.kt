@@ -11,6 +11,7 @@ import android.os.Looper
 import androidx.core.content.FileProvider
 import androidx.core.net.toUri
 import com.msp1974.vacompanion.settings.APPConfig
+import io.github.z4kn4fein.semver.toVersion
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
@@ -19,77 +20,66 @@ import kotlinx.serialization.json.put
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.File
-import kotlin.math.max
-
 
 data class LatestRelease(
-    var version: String,
-    var downloadURL: String
+    var version: String = "0.0.0",
+    var downloadURL: String = ""
 )
-
-class Version(inputVersion: String) : Comparable<Version> {
-
-    var version: String
-        private set
-
-    override fun compareTo(other: Version) =
-        (split() to other.split()).let {(thisParts, thatParts)->
-            val length = max(thisParts.size, thatParts.size)
-            for (i in 0 until length) {
-                val thisPart = if (i < thisParts.size) thisParts[i].toInt() else 0
-                val thatPart = if (i < thatParts.size) thatParts[i].toInt() else 0
-                if (thisPart < thatPart) return -1
-                if (thisPart > thatPart) return 1
-            }
-            0
-        }
-
-    init {
-        require(inputVersion.matches("[0-9]+(\\.[0-9]+)*".toRegex())) { "Invalid version format" }
-        version = inputVersion
-    }
-
-    private fun Version.split() = version.split(".").toTypedArray()
-}
-
 
 class Updater(val activity: Activity) {
     private val log = Logger()
     var latestRelease: LatestRelease = LatestRelease("0.0.0", "")
 
-    fun getLatestRelease(forceUpdate: Boolean = true): LatestRelease {
-        if (latestRelease.version == "0.0.0" || forceUpdate) {
-            val data = githubApiGET(APPConfig.GITHUB_API_URL)
-            latestRelease.version =
-                data.getOrDefault("name", "0.0.0").toString().replace("v", "").replace("\"", "")
-            try {
-                val assets = data.getOrDefault("assets", null)
-                if (assets != null) {
-                    for (asset in assets as List<JsonObject>) {
-                        if (asset.getOrDefault(
-                                "content_type",
-                                ""
-                            ).toString()
-                                .replace("\"", "") == "application/vnd.android.package-archive"
-                        ) {
-                            latestRelease.downloadURL =
-                                asset.getOrDefault("browser_download_url", "").toString()
-                                    .replace("\"", "")
-                        }
+    private fun getDownloadLink(data: JsonObject): String {
+        try {
+            val assets = data.getOrDefault("assets", null)
+            if (assets != null) {
+                for (asset in assets as List<JsonObject>) {
+                    if (asset.getOrDefault(
+                            "content_type",
+                            ""
+                        ).toString()
+                            .replace("\"", "") == "application/vnd.android.package-archive"
+                    ) {
+                        return asset.getOrDefault("browser_download_url", "").toString()
+                                .replace("\"", "")
                     }
                 }
-            } catch (e: Exception) {
-                log.e(e.message.toString())
             }
+        } catch (e: Exception) {
+            log.e(e.message.toString())
+        }
+        return ""
+    }
+
+    fun getLatestRelease(forceUpdate: Boolean = true): LatestRelease {
+        if (latestRelease.version == "0.0.0" || forceUpdate) {
+            val data = githubApiGET("${APPConfig.GITHUB_API_URL}/latest")
+            latestRelease.version =
+                data.getOrDefault("name", "0.0.0").toString().replace("v", "").replace("\"", "")
+            latestRelease.downloadURL = getDownloadLink(data)
         }
         return latestRelease
     }
 
-    fun isUpdateAvailable(): Boolean {
-        val latestRelease = getLatestRelease()
-        if (latestRelease.version != "0.0.0") {
+    fun getVersionRelease(version: String): LatestRelease {
+        val data = githubApiGET("${APPConfig.GITHUB_API_URL}/tags/v$version")
+        latestRelease.version =
+            data.getOrDefault("name", "0.0.0").toString().replace("v", "").replace("\"", "")
+        latestRelease.downloadURL = getDownloadLink(data)
+        return latestRelease
+    }
+
+    fun isUpdateAvailable(version: String = ""): Boolean {
+        var release: LatestRelease
+        if (version != "") {
+          release = getVersionRelease(version)
+        } else {
+          release = getLatestRelease()
+        }
+        if (release.version != "0.0.0") {
             val installed =  activity.packageManager.getPackageInfo(activity.packageName, 0).versionName.toString()
-            return Version(latestRelease.version) > Version(installed)
+            return release.version.toVersion() > installed.toVersion()
         }
         return false
     }
@@ -158,18 +148,18 @@ class Updater(val activity: Activity) {
             .url(url)
             .build()
 
-        client.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) {
-                AuthUtils.Companion.log.e("Unexpected code $response")
-                return buildJsonObject { put("unexpected_code", response.code() ) }
-            }
-            try {
+        try {
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    AuthUtils.Companion.log.e("Unexpected code $response")
+                    return buildJsonObject { put("unexpected_code", response.code()) }
+                }
                 val response = response.body()?.string()
                 return JsonObject(Json.parseToJsonElement(response.toString()).jsonObject)
-            } catch (e: Exception) {
-                AuthUtils.Companion.log.e(e.message.toString())
-                return buildJsonObject { put("error",e.message.toString() ) }
             }
+        } catch (e: Exception) {
+            log.e(e.message.toString())
+            return buildJsonObject { put("error",e.message.toString() ) }
         }
     }
 
