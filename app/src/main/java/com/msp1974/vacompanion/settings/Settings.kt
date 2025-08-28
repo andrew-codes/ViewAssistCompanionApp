@@ -125,7 +125,7 @@ class APPConfig(val context: Context) {
         onValueChangedListener(property, oldValue, newValue)
     }
 
-    var pairedDeviceID: String by Delegates.observable("") { property, oldValue, newValue ->
+    var pairedDeviceID: String by Delegates.observable(pairedDeviceId) { property, oldValue, newValue ->
         pairedDeviceId = newValue
         onValueChangedListener(property, oldValue, newValue)
     }
@@ -179,7 +179,7 @@ class APPConfig(val context: Context) {
             wakeWordSound = settings["wake_word_sound"] as String
         }
         if (settings.has("wake_word_threshold")) {
-            wakeWordThreshold = settings.getInt("wake_word_threshold").toFloat() / 100
+            wakeWordThreshold = settings.getInt("wake_word_threshold").toFloat() / 10
         }
         if (settings.has("notification_volume")) {
             notificationVolume = settings.getInt("notification_volume").toFloat() / 100
@@ -210,9 +210,6 @@ class APPConfig(val context: Context) {
         }
         if (settings.has("do_not_disturb")) {
             doNotDisturb = settings.getBoolean("do_not_disturb")
-        }
-        if (settings.has("wake_word_threshold")) {
-            wakeWordThreshold = settings.getInt("wake_word_threshold").toFloat() / 10
         }
         if (settings.has("dark_mode")) {
             darkMode = settings.getBoolean("dark_mode")

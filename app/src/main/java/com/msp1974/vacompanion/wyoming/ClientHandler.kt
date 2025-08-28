@@ -13,6 +13,7 @@ import com.msp1974.vacompanion.audio.VAMediaPlayer
 import com.msp1974.vacompanion.broadcasts.BroadcastSender
 import com.msp1974.vacompanion.settings.APPConfig
 import com.msp1974.vacompanion.utils.DeviceCapabilitiesManager
+import com.msp1974.vacompanion.utils.Event
 import com.msp1974.vacompanion.utils.Logger
 import io.github.z4kn4fein.semver.toVersion
 import kotlinx.serialization.ExperimentalSerializationApi
@@ -110,7 +111,7 @@ class ClientHandler(private val context: Context, private val server: WyomingTCP
     private fun startSatellite() {
 
         if (config.version.toVersion() < config.minRequiredApkVersion.toVersion()) {
-            log.d("App update needed. App is ${config.version}, Integration is ${config.integrationVersion}")
+            log.d("App update needed. App is ${config.version}, Min required is ${config.minRequiredApkVersion}")
             BroadcastSender.sendBroadcast(context, BroadcastSender.VERSION_MISMATCH)
             return
         }
@@ -325,10 +326,7 @@ class ClientHandler(private val context: Context, private val server: WyomingTCP
             }
 
             "refresh" -> {
-                BroadcastSender.sendBroadcast(
-                    context,
-                    BroadcastSender.REFRESH
-                )
+                config.eventBroadcaster.notifyEvent(Event("refresh", "", ""))
             }
 
             "wake" -> {

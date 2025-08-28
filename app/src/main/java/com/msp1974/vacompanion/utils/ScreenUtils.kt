@@ -1,59 +1,18 @@
 package com.msp1974.vacompanion.utils
 
+import android.content.Context
 import android.content.ContextWrapper
-import android.content.pm.ActivityInfo
 import android.os.PowerManager
 import android.provider.Settings
-import android.view.OrientationEventListener
-import android.view.View
-import androidx.appcompat.app.AppCompatActivity
 import com.google.firebase.Firebase
 import com.google.firebase.crashlytics.crashlytics
 import com.msp1974.vacompanion.settings.APPConfig
 
-class ScreenUtils(val activity: AppCompatActivity) : ContextWrapper(activity) {
+
+class ScreenUtils(val context: Context) : ContextWrapper(context) {
     var log = Logger()
-    var config = APPConfig.getInstance(activity.applicationContext)
+    var config = APPConfig.getInstance(context)
     private var wakeLock: PowerManager.WakeLock? = null
-    private var orientationEventListener: OrientationEventListener
-
-    init {
-        //Orientation listener
-        // This exists as some devices do not call the onConfigurationChanged callback
-        // when orientation changes
-        // This seems functional on all devices
-        orientationEventListener = object : OrientationEventListener(this) {
-            override fun onOrientationChanged(orientation: Int) {
-                if (orientation in (320..359) || orientation in (0..40)) {
-                    activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
-                }
-                if (orientation in (50..120)) {
-                    activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_REVERSE_LANDSCAPE
-                }
-                if (orientation in (130..220)) {
-                    activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_REVERSE_PORTRAIT
-                }
-                if (orientation in (230..310)) {
-                    activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
-                }
-            }
-        }
-        if (orientationEventListener.canDetectOrientation()) {
-            orientationEventListener.enable()
-        }
-    }
-
-
-    fun hideStatusAndActionBars() {
-        val window = activity.window
-        val visibility = (View.SYSTEM_UI_FLAG_LAYOUT_STABLE
-                or View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
-                or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
-                or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
-                or View.SYSTEM_UI_FLAG_FULLSCREEN
-                or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY)
-        window.decorView.systemUiVisibility = visibility
-    }
 
     fun setScreenBrightness(
         screenBrightnessValue: Int

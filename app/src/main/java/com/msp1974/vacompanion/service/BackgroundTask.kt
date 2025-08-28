@@ -111,23 +111,20 @@ internal class BackgroundTaskController (private val context: Context): EventLis
     }
 
     override fun onEventTriggered(event: Event) {
+        var consumed = true
         when (event.eventName) {
             "notificationVolume" -> {
-                log.i("BackgroundTask - notificationVolume changed to ${event.newValue}")
                 setVolume(AudioManager.STREAM_NOTIFICATION, event.newValue as Float)
             }
             "musicVolume" -> {
-                log.i("BackgroundTask - musicVolume changed to ${event.newValue}")
                 setVolume(AudioManager.STREAM_MUSIC, event.newValue as Float)
             }
             "wakeWord" -> {
-                log.i("BackgroundTask - wakeWord changed to ${event.newValue}")
                 if (audioRoute != AudioRouteOption.NONE) {
                     restartWakeWordDetection()
                 }
             }
             "doNotDisturb" -> {
-                log.i("BackgroundTask - doNotDisturb changed to ${event.newValue}")
                 setDoNotDisturb(event.newValue as Boolean)
             }
             "pairedDeviceID" -> {
@@ -139,6 +136,10 @@ internal class BackgroundTaskController (private val context: Context): EventLis
                     zeroConf.registerService(config.serverPort)
                 }
             }
+            else -> consumed = false
+        }
+        if (consumed) {
+            log.d("BackgroundTask - Event: ${event.eventName} - ${event.newValue}")
         }
     }
 
@@ -218,10 +219,6 @@ internal class BackgroundTaskController (private val context: Context): EventLis
                 if (config.diagnosticsEnabled) {
                     val event = Event("diagnosticStats", audioBuffer.maxOrNull() ?: 0, res)
                     config.eventBroadcaster.notifyEvent(event)
-                }
-
-                if (res > 0.1) {
-                    log.d("Wake word prediction: $res")
                 }
 
                 if (res >= config.wakeWordThreshold) {

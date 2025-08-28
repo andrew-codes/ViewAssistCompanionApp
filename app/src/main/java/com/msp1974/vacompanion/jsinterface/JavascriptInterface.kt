@@ -11,12 +11,11 @@ interface ExternalAuthCallback {
 }
 
 /** Instantiate the interface and set the context.  */
-class WebAppInterface(private val context: Context) {
-    val config: APPConfig = APPConfig.getInstance(context)
+class WebAppInterface(val uuid: String) {
 
     @JavascriptInterface
     fun getViewAssistCAUUID(): String {
-        return config.uuid
+        return uuid
     }
 }
 

@@ -152,10 +152,10 @@ class Updater(val activity: Activity) {
             client.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) {
                     AuthUtils.Companion.log.e("Unexpected code $response")
-                    return buildJsonObject { put("unexpected_code", response.code()) }
+                    return buildJsonObject { put("unexpected_code", response.code) }
                 }
-                val response = response.body()?.string()
-                return JsonObject(Json.parseToJsonElement(response.toString()).jsonObject)
+                val response = response.body.string()
+                return JsonObject(Json.parseToJsonElement(response).jsonObject)
             }
         } catch (e: Exception) {
             log.e(e.message.toString())

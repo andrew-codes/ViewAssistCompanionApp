@@ -75,7 +75,7 @@ class NotificationUtils(context: Context?, private val resources: Resources?) :
 
     @RequiresApi(api = Build.VERSION_CODES.O)
     fun getAndroidChannelNotification(title: String?, body: String?): Notification.Builder {
-        val color = ContextCompat.getColor(applicationContext, R.color.colorPrimary)
+        val color = ContextCompat.getColor(applicationContext, R.color.blue)
         val builder: Notification.Builder =
             Notification.Builder(applicationContext, ANDROID_CHANNEL_ID)
                 .setContentTitle(title)
@@ -91,7 +91,7 @@ class NotificationUtils(context: Context?, private val resources: Resources?) :
     }
 
     fun getAndroidNotification(title: String?, body: String?): NotificationCompat.Builder {
-        val color = ContextCompat.getColor(applicationContext, R.color.colorPrimary)
+        val color = ContextCompat.getColor(applicationContext, R.color.blue)
         return NotificationCompat.Builder(applicationContext)
             .setLargeIcon(BitmapFactory.decodeResource(resources, R.mipmap.ic_launcher))
             .setContentTitle(title)

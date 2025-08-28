@@ -3,8 +3,8 @@ package com.msp1974.vacompanion
 import android.Manifest.permission
 import android.annotation.SuppressLint
 import android.app.AlertDialog
-import android.app.DownloadManager
 import android.app.NotificationManager
+import android.app.UiModeManager
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.DialogInterface
@@ -12,40 +12,58 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.content.res.Configuration
-import android.content.res.Resources
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.StrictMode
 import android.provider.Settings
-import android.view.View
-import android.widget.ImageView
-import android.widget.TextView
+import android.view.ViewGroup
+import android.view.WindowManager
+import androidx.activity.ComponentActivity
+import androidx.activity.OnBackPressedCallback
+import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.appcompat.app.AppCompatActivity
-import androidx.appcompat.widget.SwitchCompat
+import androidx.activity.viewModels
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.core.net.toUri
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
+import com.msp1974.vacompanion.ui.VAViewModel
 import com.msp1974.vacompanion.broadcasts.BroadcastSender
 import com.msp1974.vacompanion.service.VABackgroundService
 import com.msp1974.vacompanion.settings.APPConfig
+import com.msp1974.vacompanion.ui.VADialog
+import com.msp1974.vacompanion.ui.layouts.MainLayout
+import com.msp1974.vacompanion.ui.theme.AppTheme
+import com.msp1974.vacompanion.utils.CustomWebView
+import com.msp1974.vacompanion.utils.CustomWebViewClient
 import com.msp1974.vacompanion.utils.DeviceCapabilitiesManager
+import com.msp1974.vacompanion.utils.Event
+import com.msp1974.vacompanion.utils.EventListener
 import com.msp1974.vacompanion.utils.FirebaseManager
 import com.msp1974.vacompanion.utils.Helpers
 import com.msp1974.vacompanion.utils.Logger
 import com.msp1974.vacompanion.utils.ScreenUtils
 import com.msp1974.vacompanion.utils.Updater
-import io.github.z4kn4fein.semver.toVersion
 import kotlin.concurrent.thread
+import kotlin.getValue
 
 
-class MainActivity : AppCompatActivity() {
-    private lateinit var config: APPConfig
+class MainActivity : ComponentActivity(), EventListener {
+    val viewModel: VAViewModel by viewModels()
+
     private val log = Logger()
     private val firebase = FirebaseManager.getInstance()
+
+    private lateinit var config: APPConfig
+    private lateinit var webView: CustomWebView
+    private lateinit var webViewClient: CustomWebViewClient
 
     private lateinit var screen: ScreenUtils
     private lateinit var updater: Updater
@@ -54,22 +72,24 @@ class MainActivity : AppCompatActivity() {
 
     @SuppressLint("HardwareIds", "SetTextI18n")
     override fun onCreate(savedInstanceState: Bundle?) {
+
+        viewModel.bind(APPConfig.getInstance(this),resources)
+
+        val splashscreen = installSplashScreen()
+        var keepSplashScreen = true
+
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_waiting)
-        this.enableEdgeToEdge()
+        enableEdgeToEdge()
+
+        splashscreen.setKeepOnScreenCondition { keepSplashScreen }
 
         config = APPConfig.getInstance(this)
         screen = ScreenUtils(this)
         updater = Updater(this)
-        screenOrientation = resources.configuration.orientation
 
+        onBackPressedDispatcher.addCallback(this, onBackButton)
         setFirebaseUserProperties()
 
-        if (!isTaskRoot && Build.VERSION.SDK_INT <= Build.VERSION_CODES.Q) {
-            log.i("MainActivity is not root")
-            finish();
-            return;
-        }
         log.i("#################################################################################################")
         log.i("Starting View Assist Companion App")
         log.i("Version ${config.version}")
@@ -79,56 +99,38 @@ class MainActivity : AppCompatActivity() {
         log.i("UUID: ${config.uuid}")
         log.i("#################################################################################################")
 
-        // Show info on screen
-        val logo = findViewById<ImageView>(R.id.vaLogo)
-        val ip = findViewById<TextView>(R.id.ip)
-        val version = findViewById<TextView>(R.id.version)
-        val uuid = findViewById<TextView>(R.id.uuid)
-        val pairedDevice = findViewById<TextView>(R.id.paired_with)
-        val startOnBoot = findViewById<SwitchCompat>(R.id.startOnBoot)
-        val updateButton = findViewById<TextView>(R.id.btnUpdate)
+        val policy = StrictMode.ThreadPolicy.Builder().permitAll().build()
+        StrictMode.setThreadPolicy(policy)
 
-        setScreenLayout()
+        setStatus(getString(R.string.status_initialising))
 
-        version.text = config.version
-        ip.text = Helpers.getIpv4HostAddress()
-        uuid.text = config.uuid
-
-        if (config.pairedDeviceID != "") {
-            pairedDevice.text = config.pairedDeviceID
+        webViewClient = CustomWebViewClient(viewModel)
+        webView = CustomWebView.getView(this@MainActivity)
+        webView.apply {
+            layoutParams = ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+            )
+            webViewClient = webViewClient
         }
+        webViewClient.initialise(webView)
 
-        // Long press on paired device id to clear pairing
-        logo.setOnLongClickListener {
-            if (config.pairedDeviceID != "") {
-                val alertDialog = AlertDialog.Builder(this)
-                alertDialog.apply {
-                    setTitle("Clear Paired Device Entry")
-                    setMessage("This will delete the currently paired Home Assistant server and allow another server to connect and pair to this device.")
-                    setPositiveButton("Confirm") { _: DialogInterface?, _: Int ->
-                        config.accessToken = ""
-                        config.pairedDeviceID = ""
-                        pairedDevice.text = "Not paired"
-                    }
-                    setNegativeButton("Cancel") { _: DialogInterface?, _: Int -> }
-                }.create().show()
+        keepSplashScreen = false
+
+        setContent {
+            AppTheme(darkMode = false, dynamicColor = false) {
+                MainLayout(webView, viewModel)
             }
-            false
         }
-
-        updateButton.setOnClickListener {
-            runUpdateRoutine()
-        }
-
-        startOnBoot.setChecked(config.startOnBoot)
-        startOnBoot.setOnCheckedChangeListener({ _, isChecked ->
-            config.startOnBoot = isChecked
-        })
 
         // Check and get required user permissions
         log.d("Checking permissions")
         checkAndRequestPermissions()
 
+    }
+
+    val onBackButton = object : OnBackPressedCallback(true) {
+        override fun handleOnBackPressed() {}
     }
 
     fun setFirebaseUserProperties() {
@@ -138,13 +140,13 @@ class MainActivity : AppCompatActivity() {
 
     fun initialise() {
         if (!hasPermissions()) {
-            setStatus("No permissions")
+            setStatus(getString(R.string.status_no_permissions))
             return
         }
-        var hasNetwork = Helpers.isNetworkAvailable(this)
+        val hasNetwork = Helpers.isNetworkAvailable(this)
         if (!this.hasWindowFocus() || !hasNetwork) {
             if (!hasNetwork) {
-                setStatus("Waiting for network...")
+                setStatus(getString(R.string.status_waiting_for_network))
             }
             Handler(Looper.getMainLooper()).postDelayed({
                 initialise()
@@ -152,16 +154,16 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
-        findViewById<TextView>(R.id.ip).text = Helpers.getIpv4HostAddress()
-
         // Initiate wake word broadcast receiver
         val satelliteBroadcastReceiver: BroadcastReceiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context, intent: Intent) {
                 when (intent.action) {
                     BroadcastSender.SATELLITE_STARTED -> {
-                        if (config.currentActivity != "WebViewActivity" && screen.isScreenOn()) {
-                            runWebViewIntent()
-                        }
+                        viewModel.setSatelliteRunning(true)
+                        webView.loadUrl(webViewClient.getHAUrl())
+                    }
+                    BroadcastSender.SATELLITE_STOPPED -> {
+                        viewModel.setSatelliteRunning(false)
                     }
                     BroadcastSender.VERSION_MISMATCH -> {
                         runUpdateRoutine()
@@ -172,55 +174,41 @@ class MainActivity : AppCompatActivity() {
         }
         val filter = IntentFilter().apply {
             addAction(BroadcastSender.SATELLITE_STARTED)
+            addAction(BroadcastSender.SATELLITE_STOPPED)
             addAction(BroadcastSender.VERSION_MISMATCH)
         }
         LocalBroadcastManager.getInstance(this)
             .registerReceiver(satelliteBroadcastReceiver, filter)
+
+        config.eventBroadcaster.addListener(this)
+
+        config.currentActivity = "Main"
 
         // Start background tasks
         runBackgroundTasks()
     }
 
     fun setStatus(status: String) {
-        runOnUiThread {
-            findViewById<TextView>(R.id.status_message).text = status
-        }
+        viewModel.setStatusMessage(status)
     }
 
     fun runUpdateRoutine() {
-        if (APPConfig.ENABLE_UPDATER && config.hasWriteExternalStoragePermission && updateProcessComplete) {
+        if (config.hasWriteExternalStoragePermission && updateProcessComplete) {
             updateProcessComplete = false
-            setStatus("Checking for updates...")
+            setStatus(getString(R.string.status_checking_for_update))
             thread(name = "Updater thread") {
-                updateHandler()
+                checkForUpdate()
             }
         } else {
-            setStatus("App update to v${config.minRequiredApkVersion} required...")
+            setStatus(getString(R.string.status_app_update_required, config.minRequiredApkVersion))
         }
-    }
-
-    fun setScreenLayout() {
-        val imageView = findViewById<ImageView>(R.id.vaLogo)
-        val orientation = resources.configuration.orientation
-        val screenHeight: Int = Resources.getSystem().displayMetrics.widthPixels;
-        val screenWidth: Int = Resources.getSystem().displayMetrics.heightPixels;
-
-        if (orientation == Configuration.ORIENTATION_LANDSCAPE) {
-            imageView.layoutParams.height = (screenHeight * 0.3).toInt()
-            imageView.layoutParams.width = screenWidth.coerceAtMost((imageView.layoutParams.height * 1.6).toInt())
-        } else {
-            imageView.layoutParams.width = (screenHeight * 0.85).toInt()
-            imageView.layoutParams.height = (imageView.layoutParams.width * 0.6).toInt()
-        }
-
-        log.i("Screen: w$screenWidth h$screenHeight o$orientation, Logo: w${imageView.layoutParams.width} h${imageView.layoutParams.height}")
     }
 
     // Listening to the orientation config
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
         if (newConfig.orientation != screenOrientation) {
-            setScreenLayout()
+            log.d("Orientation changed to ${newConfig.orientation}")
         }
     }
 
@@ -228,38 +216,16 @@ class MainActivity : AppCompatActivity() {
         super.onResume()
         log.d("Main Activity resumed")
 
-        // Show/hide update button
-        if (config.version.toVersion() < config.minRequiredApkVersion.toVersion()) {
-            findViewById<TextView>(R.id.btnUpdate).visibility = View.VISIBLE
-        } else {
-            findViewById<TextView>(R.id.btnUpdate).visibility = View.INVISIBLE
-        }
+        setScreenAlwaysOn(config.screenAlwaysOn)
 
-        if (screen.isScreenOn() && config.isRunning) {
-            log.d("Resuming webView activity")
-            firebase.logEvent(FirebaseManager.SATELLITE_ALREADY_RUNNING_MAIN, mapOf())
-            runWebViewIntent()
-        }
+        val windowInsetsController = WindowCompat.getInsetsController(window, window.decorView)
+        windowInsetsController.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        windowInsetsController.hide(WindowInsetsCompat.Type.systemBars())
     }
 
-    @SuppressLint("Wakelock")
     override fun onDestroy() {
         log.d("Main Activity destroyed")
         super.onDestroy()
-    }
-
-    override fun onWindowFocusChanged(hasFocus: Boolean) {
-        super.onWindowFocusChanged(hasFocus)
-        if (hasFocus) {
-            log.d("Main Activity window focus changed")
-            config.currentActivity = "MainActivity"
-            // Hide status and action bars
-            ScreenUtils(this).hideStatusAndActionBars()
-            val pairedWith = findViewById<TextView>(R.id.paired_with)
-            if (config.pairedDeviceID != "") {
-                pairedWith.text = config.pairedDeviceID
-            }
-        }
     }
 
     private fun runBackgroundTasks() {
@@ -275,16 +241,76 @@ class MainActivity : AppCompatActivity() {
             return
         }
         log.d("Starting background tasks")
-        setStatus("Waiting for connection...")
+        setStatus(getString(R.string.status_waiting_for_connection))
         val serviceIntent = Intent(this.applicationContext, VABackgroundService::class.java)
         startService(serviceIntent)
     }
 
-    private fun runWebViewIntent() {
-        log.d("Loading WebView activity")
-        val webIntent = Intent(this@MainActivity, WebViewActivity::class.java)
-        webIntent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
-        startActivity(webIntent)
+    override fun onEventTriggered(event: Event) {
+        var consumed = true
+        when (event.eventName) {
+            "darkMode" -> setDarkMode(event.newValue as Boolean)
+            "screenAlwaysOn" -> runOnUiThread { setScreenAlwaysOn(event.newValue as Boolean) }
+            "screenAutoBrightness" -> runOnUiThread { setScreenAutoBrightness(event.newValue as Boolean) }
+            "screenBrightness" -> runOnUiThread { setScreenBrightness(event.newValue as Float) }
+            else -> consumed = false
+        }
+        if (consumed) {
+            log.d("MainActivity - Event: ${event.eventName} - ${event.newValue}")
+        }
+    }
+
+    fun setDarkMode(isDark: Boolean) {
+        log.d("Setting dark mode: $isDark")
+
+        // Set device dark mode
+        val uiModeManager = getSystemService(UI_MODE_SERVICE) as UiModeManager
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            uiModeManager.setApplicationNightMode(if (isDark) UiModeManager.MODE_NIGHT_YES else UiModeManager.MODE_NIGHT_NO)
+        } else {
+            uiModeManager.nightMode = if (isDark) UiModeManager.MODE_NIGHT_YES else UiModeManager.MODE_NIGHT_NO
+        }
+
+        // Set webview dark mode if supported for older devices
+        webViewClient.setDarkMode(isDark)
+    }
+
+    fun setScreenBrightness(brightness: Float) {
+        try {
+            if (screen.canWriteScreenSetting()) {
+                screen.setScreenBrightness((brightness * 255).toInt())
+            } else {
+                val layout: WindowManager.LayoutParams? = this.window?.attributes
+                layout?.screenBrightness = brightness
+                this.window?.attributes = layout
+            }
+        } catch (e: Exception) {
+            firebase.logException(e)
+            e.printStackTrace()
+        }
+    }
+
+    fun setScreenAutoBrightness(state: Boolean) {
+        if (!state) {
+            screen.setDeviceBrightnessMode(false)
+            setScreenBrightness(config.screenBrightness)
+        } else {
+            screen.setDeviceBrightnessMode(true)
+        }
+    }
+
+    fun setScreenAlwaysOn(state: Boolean) {
+        // wake lock
+        if (state) {
+            screen.wakeScreen()
+            window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            window.addFlags(WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD)
+            window.addFlags(WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED)
+            window.decorView.keepScreenOn = true
+        } else {
+            window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            window.decorView.keepScreenOn = false
+        }
     }
 
     private fun hasPermissions(): Boolean {
@@ -436,59 +462,63 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun updateHandler() {
+    private fun checkForUpdate() {
         Looper.prepare()
         if (updater.isUpdateAvailable(config.minRequiredApkVersion)) {
             log.d("Update available - ${updater.latestRelease.downloadURL}")
-            runOnUiThread {
-                val updateDialog = AlertDialog.Builder(this)
-                updateDialog.apply {
-                    setCancelable(false)
-                    setTitle("Update Required")
-                    setMessage("You require version ${config.minRequiredApkVersion} of this app to connect to your server. Do you wish to download and install this version now?")
-                    setPositiveButton("Yes") { _: DialogInterface?, _: Int ->
-                        log.d("Install requested")
-                        setStatus("Downloading update...")
-                        updater.requestDownload { uri ->
-                            if (uri != "") {
-                                log.d("Download complete = $uri")
-                                setStatus("Installing update...")
-                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                                    val intent = Intent(Intent.ACTION_INSTALL_PACKAGE)
-                                    intent.setData(uri.toUri())
-                                    intent.setFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                                    onUpdateAppActivityResult.launch(intent)
-                                } else {
-                                    val intent = Intent(Intent.ACTION_VIEW)
-                                    intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                    intent.setDataAndType(
-                                        uri.toUri(),
-                                        "application/vnd.android.package-archive"
-                                    );
-                                    onUpdateAppActivityResult.launch(intent)
-                                }
-                            } else {
-                                updateDialog.apply {
-                                    setTitle("Error downloading update")
-                                    setMessage("There was an error downloading the update.  This could be caused by a lack of disk space or an error accessing the internet.")
-                                    setPositiveButton("OK") { _: DialogInterface?, _: Int ->
-                                        updateProcessComplete = true
-                                    }
-                                }.create().show()
-                            }
-                        }
-                    }
-                    setNegativeButton("No thanks") { _: DialogInterface?, _: Int ->
-                        updateProcessComplete = true
-                        setStatus("Incompatible version. Please update")
-                        findViewById<TextView>(R.id.btnUpdate).visibility = View.VISIBLE
-                    }
-                }.create().show()
-            }
+
+            val a = VADialog(
+                title = "Update Required",
+                message = "You require a minimum of v${config.minRequiredApkVersion} of this app to connect to your server.  Do you wish to download and install this version now?",
+                confirmCallback = {
+                    downloadAndInstallUpdate()
+                },
+                dismissCallback = {
+                    updateProcessComplete = true
+                    viewModel.vacaState.value.updates.updateAvailable = true
+                    setStatus(getString(R.string.status_app_update_required, config.minRequiredApkVersion))
+                }
+            )
+            viewModel.showUpdateDialog(a)
         } else {
             updateProcessComplete = true
             setStatus("Incompatible version. In app update not available")
+        }
+    }
+
+    private fun downloadAndInstallUpdate() {
+        setStatus(getString(R.string.status_downloading_update))
+        updater.requestDownload { uri ->
+            if (uri != "") {
+                log.d("Download complete = $uri")
+                setStatus(getString(R.string.status_installing_update))
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    val intent = Intent(Intent.ACTION_INSTALL_PACKAGE)
+                    intent.setData(uri.toUri())
+                    intent.setFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    onUpdateAppActivityResult.launch(intent)
+                } else {
+                    val intent = Intent(Intent.ACTION_VIEW)
+                    intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    intent.setDataAndType(
+                        uri.toUri(),
+                        "application/vnd.android.package-archive"
+                    );
+                    onUpdateAppActivityResult.launch(intent)
+                }
+            } else {
+                val b = VADialog(
+                    title = "Error downloading update",
+                    message = "There was an error downloading the update.  This could be caused by a lack of disk space or an error accessing the internet.",
+                    confirmCallback = {
+                        updateProcessComplete = true
+                        setStatus(getString(R.string.status_app_update_required, config.minRequiredApkVersion))
+                    },
+                    dismissCallback = {}
+                )
+                viewModel.showUpdateDialog(b)
+            }
         }
     }
 

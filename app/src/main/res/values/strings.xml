@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">View Assist App</string>
+    <string name="app_name">View Assist Companion App</string>
 
     <string name="service_notification_channel_name">View Assist</string>
     <string name="service_notification_channel_description">View Assist Running…</string>
@@ -16,4 +16,16 @@
     <string name="dialog_button_yes">Yes</string>
     <string name="dialog_button_always_yes">Always Yes</string>
     <string name="dialog_button_no">No</string>
+
+    <string name="button_update_required">Install update</string>
+
+    <string name="status_initialising">Initialising</string>
+    <string name="status_checking_for_update">Checking for update</string>
+    <string name="status_no_permissions">Incorrect permissions</string>
+    <string name="status_waiting_for_network">Waiting for network</string>
+    <string name="status_waiting_for_connection">Waiting for connection</string>
+    <string name="status_app_update_required">App update to v%1$s required</string>
+    <string name="status_downloading_update">Downloading update</string>
+    <string name="status_installing_update">Installing update</string>
+
 </resources>

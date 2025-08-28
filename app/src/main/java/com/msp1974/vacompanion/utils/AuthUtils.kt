@@ -100,7 +100,7 @@ class AuthUtils {
                 "client_id" to getClientId(),
                 "code" to authCode
             )
-
+            log.d("URL: ${getTokenUrl(baseUrl)} Auth code: $authCode, client id: ${getClientId()}")
             val response = httpPOST(url, map, verifySSL)
             try {
                 val json = JSONObject(response)
@@ -126,11 +126,12 @@ class AuthUtils {
                 "client_id" to getClientId(),
                 "refresh_token" to refreshToken
             )
+            log.d("URL: ${getTokenUrl(host)} Refresh token: $refreshToken, client id: ${getClientId()}")
             val response = httpPOST(url, map, verifySSL)
             try {
                 val json = JSONObject(response)
+                log.d("JSON reposne: $json")
                 val expiresIn = System.currentTimeMillis() + (json.getString("expires_in").toInt() * 1000)
-
 
                 return AuthToken(
                     json.getString("token_type"),
@@ -178,7 +179,7 @@ class AuthUtils {
                         log.e("Unexpected code $response")
                         return ""
                     }
-                    return response.body()?.string().toString()
+                    return response.body.string()
                 }
             } catch (e: Exception) {
                 log.e("Error authorising with HA: ${e.message.toString()}")
