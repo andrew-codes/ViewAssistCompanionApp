@@ -41,6 +41,7 @@ import com.msp1974.vacompanion.settings.APPConfig
 import com.msp1974.vacompanion.ui.VADialog
 import com.msp1974.vacompanion.ui.layouts.MainLayout
 import com.msp1974.vacompanion.ui.theme.AppTheme
+import com.msp1974.vacompanion.utils.AuthUtils
 import com.msp1974.vacompanion.utils.CustomWebView
 import com.msp1974.vacompanion.utils.CustomWebViewClient
 import com.msp1974.vacompanion.utils.DeviceCapabilitiesManager
@@ -105,13 +106,13 @@ class MainActivity : ComponentActivity(), EventListener {
         setStatus(getString(R.string.status_initialising))
 
         webViewClient = CustomWebViewClient(viewModel)
-        webView = CustomWebView.getView(this@MainActivity)
+        webView = CustomWebView.getView(this)
+        webView.webViewClient = webViewClient
         webView.apply {
             layoutParams = ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT
             )
-            webViewClient = webViewClient
         }
         webViewClient.initialise(webView)
 
@@ -160,7 +161,9 @@ class MainActivity : ComponentActivity(), EventListener {
                 when (intent.action) {
                     BroadcastSender.SATELLITE_STARTED -> {
                         viewModel.setSatelliteRunning(true)
-                        webView.loadUrl(webViewClient.getHAUrl())
+                        val url = AuthUtils.getURL(webViewClient.getHAUrl())
+                        log.d("Loading URL: $url")
+                        webView.loadUrl(url)
                     }
                     BroadcastSender.SATELLITE_STOPPED -> {
                         viewModel.setSatelliteRunning(false)
