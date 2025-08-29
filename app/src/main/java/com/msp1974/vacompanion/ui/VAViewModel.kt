@@ -6,6 +6,7 @@ import androidx.compose.material3.DrawerState
 import androidx.compose.material3.DrawerValue
 import androidx.lifecycle.ViewModel
 import com.msp1974.vacompanion.broadcasts.BroadcastSender
+import com.msp1974.vacompanion.service.AudioRouteOption
 import com.msp1974.vacompanion.settings.APPConfig
 import com.msp1974.vacompanion.utils.Event
 import com.msp1974.vacompanion.utils.EventListener
@@ -106,15 +107,15 @@ class VAViewModel: ViewModel(), EventListener {
                 }
             }
             "diagnosticStats" -> {
-                val detection = abs(event.newValue as Float)
+                val data = event.newValue as DiagnosticInfo
                 consumed = false  //Do not log event as very numerous
 
                 if (holdIterations > 40) {
-                    maxDetectionLevel = detection
+                    maxDetectionLevel = data.detectionLevel
                     holdIterations = 0
                 }
-                if (detection > maxDetectionLevel) {
-                    maxDetectionLevel = detection
+                if (data.detectionLevel > maxDetectionLevel) {
+                    maxDetectionLevel = data.detectionLevel
                     holdIterations = 0
                 } else {
                     ++holdIterations
@@ -122,10 +123,8 @@ class VAViewModel: ViewModel(), EventListener {
 
                 _vacaState.update { currentState ->
                     currentState.copy(
-                        diagnosticInfo = _vacaState.value.diagnosticInfo.copy(
-                            audioLevel = event.oldValue as Float * 100,
-                            detectionLevel = maxDetectionLevel * 10f,
-                            detectionThreshold = config!!.wakeWordThreshold * 10
+                        diagnosticInfo = data.copy(
+                            detectionLevel = maxDetectionLevel
                         )
                     )
                 }
@@ -190,6 +189,7 @@ class VAViewModel: ViewModel(), EventListener {
                 appInfo = mapOf(
                     "Version" to config!!.version,
                     "IP Address" to Helpers.getIpv4HostAddress(),
+                    "Port" to APPConfig.SERVER_PORT.toString(),
                     "UUID" to config!!.uuid,
                     "Paired to" to config!!.pairedDeviceID,
                 )
@@ -244,5 +244,7 @@ data class DiagnosticInfo(
     var show: Boolean = false,
     var audioLevel: Float = 0f,
     var detectionThreshold: Float = 0f,
-    var detectionLevel: Float = 0f
+    var detectionLevel: Float = 0f,
+    var mode: AudioRouteOption = AudioRouteOption.NONE,
+    var vadDetection: Boolean = false
 )

@@ -16,6 +16,7 @@ import com.msp1974.vacompanion.openwakeword.ONNXModelRunner
 import com.msp1974.vacompanion.sensors.SensorUpdatesCallback
 import com.msp1974.vacompanion.sensors.Sensors
 import com.msp1974.vacompanion.settings.APPConfig
+import com.msp1974.vacompanion.ui.DiagnosticInfo
 import com.msp1974.vacompanion.utils.Event
 import com.msp1974.vacompanion.utils.EventListener
 import com.msp1974.vacompanion.utils.FirebaseManager
@@ -50,6 +51,7 @@ internal class BackgroundTaskController (private val context: Context): EventLis
     lateinit var server: WyomingTCPServer
 
     var debounce: Int = 0
+    var vadDebounce: Int = 25
 
     object Constants {
         const val DEBOUNCE_COUNTER = 20
@@ -172,21 +174,23 @@ internal class BackgroundTaskController (private val context: Context): EventLis
             log.i("Starting input audio")
             recorder = AudioRecorder(context, object : AudioInCallback {
                 override fun onAudio(audioBuffer: ShortArray) {
-                    if (audioRoute == AudioRouteOption.DETECT) {
-                        var floatBuffer = audioDSP.normaliseAudioBuffer(audioBuffer)
-                        processAudioToWakeWordEngine(context, floatBuffer)
-                    } else if (audioRoute == AudioRouteOption.STREAM) {
-                        val gAudioBuffer = audioDSP.autoGain(audioBuffer, config.micGain)
-                        var bAudioBuffer = audioDSP.shortArrayToByteBuffer(gAudioBuffer)
-                        if (config.diagnosticsEnabled) {
-                            val event = Event(
-                                "diagnosticStats",
-                                (gAudioBuffer.max() / 32768f).toFloat(),
-                                0f
-                            )
-                            config.eventBroadcaster.notifyEvent(event)
+                    when (audioRoute) {
+                        AudioRouteOption.DETECT -> {
+                            val floatBuffer = audioDSP.normaliseAudioBuffer(audioBuffer)
+                            processAudioToWakeWordEngine(context, floatBuffer)
                         }
-                        server.sendAudio(bAudioBuffer)
+                        AudioRouteOption.STREAM -> {
+                            val gAudioBuffer = audioDSP.autoGain(audioBuffer, config.micGain)
+                            val bAudioBuffer = audioDSP.shortArrayToByteBuffer(gAudioBuffer)
+                            if (config.diagnosticsEnabled) {
+                                sendDiagnostics(
+                                    gAudioBuffer.max() / 32768f,
+                                    0f
+                                )
+                            }
+                            server.sendAudio(bAudioBuffer)
+                        }
+                        else -> {}
                     }
                 }
 
@@ -217,8 +221,10 @@ internal class BackgroundTaskController (private val context: Context): EventLis
                 val res = debouncedDetection(model!!.predict_WakeWord(audioBuffer).toFloat())
 
                 if (config.diagnosticsEnabled) {
-                    val event = Event("diagnosticStats", audioBuffer.maxOrNull() ?: 0, res)
-                    config.eventBroadcaster.notifyEvent(event)
+                    sendDiagnostics(
+                        audioBuffer.maxOrNull() ?: 0f,
+                        res
+                    )
                 }
 
                 if (res >= config.wakeWordThreshold) {
@@ -256,6 +262,18 @@ internal class BackgroundTaskController (private val context: Context): EventLis
             debounce = Constants.DEBOUNCE_COUNTER
         }
         return prediction
+    }
+
+    fun sendDiagnostics(audioLevel: Float, detectionLevel: Float) {
+        val data = DiagnosticInfo(
+            show = config.diagnosticsEnabled,
+            audioLevel = audioLevel * 100,
+            detectionLevel = detectionLevel * 10,
+            detectionThreshold = config.wakeWordThreshold,
+            mode = audioRoute
+        )
+        val event = Event("diagnosticStats", "", data)
+        config.eventBroadcaster.notifyEvent(event)
     }
 
     fun shutdown() {
