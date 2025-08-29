@@ -50,14 +50,9 @@ open class CustomWebViewClient(viewModel: VAViewModel): WebViewClientCompat(), E
             loadWithOverviewMode = true
             useWideViewPort = true
             setRenderPriority(WebSettings.RenderPriority.HIGH)
-            loadWithOverviewMode = true
             mediaPlaybackRequiresUserGesture = false
             safeBrowsingEnabled = false
             mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
-            //if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            //    isAlgorithmicDarkeningAllowed = true
-            //}
-
         }
 
         val nightModeFlag = resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK
@@ -77,10 +72,7 @@ open class CustomWebViewClient(viewModel: VAViewModel): WebViewClientCompat(), E
         }
 
         config.eventBroadcaster.addListener(this)
-
         view.removeAllViews()
-        //view.loadUrl(getHAUrl())
-
     }
 
     fun setDarkMode(isDark: Boolean) {
@@ -137,10 +129,6 @@ open class CustomWebViewClient(viewModel: VAViewModel): WebViewClientCompat(), E
                     view.loadUrl(AuthUtils.getURL(getHAUrl()))
                 }
             }
-        } else {
-            log.d("Loading URL - $url")
-            val extraHeaders: Map<String, String> = hashMapOf("Sec-CH-Prefers-Color-Scheme" to "dark")
-            view.loadUrl(url, extraHeaders)
         }
         return true
     }

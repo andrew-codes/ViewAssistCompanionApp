@@ -8,6 +8,8 @@ import android.view.MotionEvent
 import android.content.res.Resources.NotFoundException
 import android.util.AttributeSet
 import android.webkit.*
+import com.msp1974.vacompanion.jsinterface.WebAppInterface
+import com.msp1974.vacompanion.jsinterface.WebViewJavascriptInterface
 
 @SuppressLint("SetJavaScriptEnabled", "ViewConstructor")
 class CustomWebView @JvmOverloads constructor(
@@ -23,23 +25,6 @@ class CustomWebView @JvmOverloads constructor(
         fun requestScrollEvents() {
             Timber.d("WebView.Android.requestScrollEvents")
             requestDisallow = true
-        }
-    }
-
-    init {
-       settings.apply {
-            javaScriptEnabled = true
-            domStorageEnabled = true
-            javaScriptCanOpenWindowsAutomatically = true
-            cacheMode = WebSettings.LOAD_NO_CACHE
-            allowFileAccess = true
-            allowContentAccess = true
-            setSupportZoom(true)
-            loadWithOverviewMode = true
-            useWideViewPort = true
-            setRenderPriority(WebSettings.RenderPriority.HIGH)
-            mediaPlaybackRequiresUserGesture = false
-            mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
         }
     }
 
@@ -64,6 +49,4 @@ class CustomWebView @JvmOverloads constructor(
             }
         }
     }
-
-
 }
