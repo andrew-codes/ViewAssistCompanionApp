@@ -53,6 +53,8 @@ class ClientHandler(private val context: Context, private val server: WyomingTCP
     private var PCMMediaPlayer: PCMMediaPlayer = PCMMediaPlayer(context)
     private var MusicPlayer: VAMediaPlayer = VAMediaPlayer.getInstance(context)
 
+    private var lastResponseIsQuestion: Boolean = false
+
     // Initiate wake word broadcast receiver
     var wakeWordBroadcastReceiver: BroadcastReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
@@ -234,6 +236,18 @@ class ClientHandler(private val context: Context, private val server: WyomingTCP
                     )
                     MusicPlayer.unDuckVolume()
 
+                    if (lastResponseIsQuestion) {
+                        lastResponseIsQuestion = false
+                        sendWakeWordDetection()
+                        sendStartPipeline()
+                    }
+
+                }
+
+                "synthesize" -> {
+                    if (event.getProp("text").endsWith("?")) {
+                        lastResponseIsQuestion = true
+                    }
                 }
 
                 "transcribe" -> {
