@@ -17,10 +17,17 @@ android {
         versionCode = 1
         versionName = "0.4.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        setProperty("archivesBaseName", "vaca-$versionName")
     }
 
     buildTypes {
+        applicationVariants.all {
+            this.outputs
+                .map { it as com.android.build.gradle.internal.api.ApkVariantOutputImpl }
+                .forEach { output ->
+                    var apkName = "vaca-" + this.versionName + "-" + this.buildType.name + ".apk"
+                    output.outputFileName = apkName
+                }
+        }
         release {
             isMinifyEnabled = true
             proguardFiles(
