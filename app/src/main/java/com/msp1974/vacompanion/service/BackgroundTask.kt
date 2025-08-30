@@ -9,6 +9,7 @@ import com.msp1974.vacompanion.Zeroconf
 import com.msp1974.vacompanion.audio.AudioDSP
 import com.msp1974.vacompanion.audio.AudioInCallback
 import com.msp1974.vacompanion.audio.AudioRecorder
+import com.msp1974.vacompanion.audio.AudioManager as AudManager
 import com.msp1974.vacompanion.audio.WakeWordSoundPlayer
 import com.msp1974.vacompanion.broadcasts.BroadcastSender
 import com.msp1974.vacompanion.openwakeword.Model
@@ -314,7 +315,7 @@ internal class BackgroundTaskController (private val context: Context): EventLis
 
     fun setVolume(stream: Int, volume: Float) {
         try {
-            val audioManager = com.msp1974.vacompanion.audio.AudioManager(context)
+            val audioManager = AudManager(context)
             audioManager.setVolume(stream, volume)
         } catch (e: Exception) {
             log.d("Error setting volume: ${e.message.toString()}")
