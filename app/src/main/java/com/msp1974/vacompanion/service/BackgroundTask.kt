@@ -269,7 +269,7 @@ internal class BackgroundTaskController (private val context: Context): EventLis
             show = config.diagnosticsEnabled,
             audioLevel = audioLevel * 100,
             detectionLevel = detectionLevel * 10,
-            detectionThreshold = config.wakeWordThreshold,
+            detectionThreshold = config.wakeWordThreshold * 10,
             mode = audioRoute
         )
         val event = Event("diagnosticStats", "", data)
