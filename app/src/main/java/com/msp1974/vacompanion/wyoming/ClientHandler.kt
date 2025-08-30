@@ -42,6 +42,8 @@ class ClientHandler(private val context: Context, private val server: WyomingTCP
     private val reader: DataInputStream = DataInputStream(client.getInputStream())
     private val writer: DataOutputStream = DataOutputStream(client.getOutputStream())
 
+    private var handler: Handler = Handler(Looper.getMainLooper())
+
     private var runClient: Boolean = true
     private var satelliteStatus: SatelliteState = SatelliteState.STOPPED
     private var pipelineStatus: PipelineStatus = PipelineStatus.INACTIVE
@@ -50,9 +52,10 @@ class ClientHandler(private val context: Context, private val server: WyomingTCP
     private var pingTimer: Timer = Timer()
 
 
-    private var PCMMediaPlayer: PCMMediaPlayer = PCMMediaPlayer(context)
-    private var MusicPlayer: VAMediaPlayer = VAMediaPlayer.getInstance(context)
+    private var pcmMediaPlayer: PCMMediaPlayer = PCMMediaPlayer(context)
+    private var musicPlayer: VAMediaPlayer = VAMediaPlayer.getInstance(context)
 
+    private var expectingTTSResponse: Boolean = false
     private var lastResponseIsQuestion: Boolean = false
 
     // Initiate wake word broadcast receiver
@@ -61,7 +64,7 @@ class ClientHandler(private val context: Context, private val server: WyomingTCP
             if (satelliteStatus == SatelliteState.RUNNING) {
                 Thread(object : Runnable {
                     override fun run() {
-                        MusicPlayer.duckVolume()
+                        musicPlayer.duckVolume()
                         sendWakeWordDetection()
                         sendStartPipeline()
                     }
@@ -130,6 +133,10 @@ class ClientHandler(private val context: Context, private val server: WyomingTCP
             // If HA url was blank in config sent from server set it here based on connected IP and port provided
             // in config
             config.homeAssistantConnectedIP = "${client.inetAddress.hostAddress}"
+
+            // Reset status vars
+            expectingTTSResponse = false
+            lastResponseIsQuestion = false
 
             if (server.pipelineClient != null) {
                 log.d("Satellite taken over by $client_id from ${server.pipelineClient?.client_id}")
@@ -217,67 +224,100 @@ class ClientHandler(private val context: Context, private val server: WyomingTCP
                     stopSatellite()
                 }
 
+                "transcribe" -> {
+                    requestInputAudioStream()
+                }
+
+                "voice-started" -> {}
+
+                "voice-stopped" -> {}
+
+                "transcript" -> {
+                    releaseInputAudioStream()
+                    if (event.getProp("text").lowercase().contains("never mind")) {
+                        resetPipeline()
+                    } else {
+                        // If no response from conversation engine in 5s, timeout
+                        setPipelineNextStageTimeout(5000)
+                    }
+                }
+
+                "synthesize" -> {
+                    if (event.getProp("text").contains("?")) {
+                        lastResponseIsQuestion = true
+                    }
+                    expectingTTSResponse = true
+                    setPipelineNextStageTimeout(5000)
+                }
+
+                "pipeline-ended" -> {}
+
                 "audio-start" -> {
+                    expectingTTSResponse = false  // This is it so reset expecting
+                    cancelPipelineNextStageTimeout() // Playing audio, cancel any timeout
                     pipelineStatus = PipelineStatus.STREAMING
-                    PCMMediaPlayer.play()
+                    musicPlayer.duckVolume()  // Duck here if announcement
+                    pcmMediaPlayer.play()
                 }
 
                 "audio-chunk" -> {
-                    PCMMediaPlayer.writeAudio(event.payload)
+                    pcmMediaPlayer.writeAudio(event.payload)
                 }
 
                 "audio-stop" -> {
-                    if (PCMMediaPlayer.isPlaying) {
-                        PCMMediaPlayer.stop()
+                    if (pcmMediaPlayer.isPlaying) {
+                        pcmMediaPlayer.stop()
                     }
                     pipelineStatus = PipelineStatus.INACTIVE
                     sendEvent(
                         "played",
                     )
-                    MusicPlayer.unDuckVolume()
 
                     if (lastResponseIsQuestion) {
-                        lastResponseIsQuestion = false
-                        sendWakeWordDetection()
                         sendStartPipeline()
+                    } else {
+                        resetPipeline()
                     }
 
-                }
-
-                "synthesize" -> {
-                    if (event.getProp("text").endsWith("?")) {
-                        lastResponseIsQuestion = true
-                    }
-                }
-
-                "transcribe" -> {
-                    requestInputAudioStream()
-                }
-
-                "transcript" -> {
-                    releaseInputAudioStream()
-                    val handler = Handler(Looper.getMainLooper())
-                    handler.postDelayed({
-                        // Unduck volume if no tts audio stream in 1s
-                        if (pipelineStatus != PipelineStatus.STREAMING) {
-                            MusicPlayer.unDuckVolume()
-                        }
-                    }, 1000) //
-                }
-
-                "voice-stopped" -> {
-                    releaseInputAudioStream()
                 }
 
                 "error" -> {
-                    releaseInputAudioStream()
-                    MusicPlayer.unDuckVolume()
+                    resetPipeline()
                 }
 
                 "custom-action" -> {
                     handleCustomAction(event)
                 }
             }
+        }
+    }
+
+    private fun setPipelineNextStageTimeout(duration: Long) {
+        cancelPipelineNextStageTimeout()
+        handler.postDelayed({
+            handlePipelineTimeout()
+        }, duration)
+    }
+
+    private fun cancelPipelineNextStageTimeout() {
+        try {
+            handler.removeCallbacksAndMessages(null)
+        } catch (ex: Exception) {}
+    }
+
+    private fun handlePipelineTimeout() {
+        log.d("Pipeline timed out")
+        resetPipeline()
+    }
+
+    private fun resetPipeline() {
+        expectingTTSResponse = false
+        lastResponseIsQuestion = false
+        if (musicPlayer.isVolumeDucked) {
+            musicPlayer.unDuckVolume()
+        }
+        if (pipelineStatus != PipelineStatus.STREAMING) {
+            releaseInputAudioStream()
         }
     }
 
@@ -300,27 +340,27 @@ class ClientHandler(private val context: Context, private val server: WyomingTCP
             "play-media" -> {
                 if (event.getProp("payload") != "") {
                     val values = JSONObject(event.getProp("payload"))
-                    MusicPlayer.play(values.getString("url"))
-                    MusicPlayer.setVolume(values.getInt("volume").toFloat() / 100)
+                    musicPlayer.play(values.getString("url"))
+                    musicPlayer.setVolume(values.getInt("volume").toFloat() / 100)
                 }
             }
 
             "play" -> {
-                MusicPlayer.resume()
+                musicPlayer.resume()
             }
 
             "pause" -> {
-                MusicPlayer.pause()
+                musicPlayer.pause()
             }
 
             "stop" -> {
-                MusicPlayer.stop()
+                musicPlayer.stop()
             }
 
             "set-volume" -> {
                 if (event.getProp("payload") != "") {
                     val values = JSONObject(event.getProp("payload"))
-                    MusicPlayer.setVolume(values.getInt("volume").toFloat() / 100)
+                    musicPlayer.setVolume(values.getInt("volume").toFloat() / 100)
                 }
             }
 
@@ -345,7 +385,7 @@ class ClientHandler(private val context: Context, private val server: WyomingTCP
 
             "wake" -> {
                 thread{
-                    MusicPlayer.duckVolume()
+                    musicPlayer.duckVolume()
                     sendWakeWordDetection()
                     sendStartPipeline()
                 }
@@ -471,6 +511,7 @@ class ClientHandler(private val context: Context, private val server: WyomingTCP
                 }
             }
         )
+        lastResponseIsQuestion = false
     }
 
     fun sendAudioStop() {
