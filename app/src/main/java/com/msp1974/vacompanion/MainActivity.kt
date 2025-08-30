@@ -155,6 +155,9 @@ class MainActivity : ComponentActivity(), EventListener {
             return
         }
 
+        // Make volume keys adjust music stream
+        volumeControlStream = AudioManager.STREAM_MUSIC
+
         // Initiate wake word broadcast receiver
         val satelliteBroadcastReceiver: BroadcastReceiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context, intent: Intent) {
