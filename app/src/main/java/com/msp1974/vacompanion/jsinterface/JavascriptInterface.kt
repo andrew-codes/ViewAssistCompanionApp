@@ -8,6 +8,7 @@ import com.msp1974.vacompanion.utils.Logger
 
 interface ExternalAuthCallback {
     fun onRequestExternalAuth()
+    fun onRequestRevokeExternalAuth()
 }
 
 /** Instantiate the interface and set the context.  */
@@ -25,5 +26,10 @@ class WebViewJavascriptInterface(val cbCallback: ExternalAuthCallback) {
     fun getExternalAuth(payload: String) {
         log.d("HA Requested external auth callback - $payload")
         cbCallback.onRequestExternalAuth()
+    }
+    @JavascriptInterface
+    fun revokeExternalAuth(payload: String) {
+        log.d("HA Revoked external auth callback - $payload")
+        cbCallback.onRequestRevokeExternalAuth()
     }
 }

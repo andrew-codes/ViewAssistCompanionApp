@@ -211,6 +211,14 @@ open class CustomWebViewClient(viewModel: VAViewModel): WebViewClientCompat(), E
             }
         }
 
+        override fun onRequestRevokeExternalAuth() {
+            log.d("External auth revoke callback in progress...")
+            config.accessToken = ""
+            config.refreshToken = ""
+            config.tokenExpiry = 0
+            loadUrl(AuthUtils.getAuthUrl(getHAUrl()))
+        }
+
         private fun loadUrl(url: String) {
             Handler(Looper.getMainLooper()).post({
                 view.loadUrl(url)
