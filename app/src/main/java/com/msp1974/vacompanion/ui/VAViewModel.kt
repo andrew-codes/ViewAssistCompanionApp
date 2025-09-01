@@ -209,6 +209,9 @@ class VAViewModel: ViewModel(), EventListener {
             dismissText = "Cancel",
             confirmCallback = {
                 config!!.pairedDeviceID = ""
+                config!!.accessToken = ""
+                config!!.refreshToken = ""
+                config!!.tokenExpiry = 0
             },
             dismissCallback = {}
         )
