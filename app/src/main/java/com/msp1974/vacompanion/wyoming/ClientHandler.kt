@@ -184,9 +184,11 @@ class ClientHandler(private val context: Context, private val server: WyomingTCP
     }
 
     private fun releaseInputAudioStream() {
-        log.d("Stopping streaming audio to server for $client_id")
-        pipelineStatus = PipelineStatus.INACTIVE
-        server.releaseInputAudioStream()
+        if (pipelineStatus == PipelineStatus.STREAMING) {
+            log.d("Stopping streaming audio to server for $client_id")
+            pipelineStatus = PipelineStatus.INACTIVE
+            server.releaseInputAudioStream()
+        }
     }
 
     private fun handleEvent(event: WyomingPacket) {
@@ -226,11 +228,16 @@ class ClientHandler(private val context: Context, private val server: WyomingTCP
 
                 "transcribe" -> {
                     requestInputAudioStream()
+                    setPipelineNextStageTimeout(10000)
                 }
 
-                "voice-started" -> {}
+                "voice-started" -> {
+                    cancelPipelineNextStageTimeout()
+                }
 
-                "voice-stopped" -> {}
+                "voice-stopped" -> {
+                    setPipelineNextStageTimeout(5000)
+                }
 
                 "transcript" -> {
                     releaseInputAudioStream()
@@ -250,7 +257,9 @@ class ClientHandler(private val context: Context, private val server: WyomingTCP
                     setPipelineNextStageTimeout(5000)
                 }
 
-                "pipeline-ended" -> {}
+                "pipeline-ended" -> {
+                    releaseInputAudioStream()
+                }
 
                 "audio-start" -> {
                     expectingTTSResponse = false  // This is it so reset expecting
@@ -319,6 +328,7 @@ class ClientHandler(private val context: Context, private val server: WyomingTCP
         if (pipelineStatus != PipelineStatus.STREAMING) {
             releaseInputAudioStream()
         }
+        sendAudioStop()
     }
 
     private fun handleCustomEvent(event: WyomingPacket) {
