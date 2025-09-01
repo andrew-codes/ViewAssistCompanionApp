@@ -146,10 +146,8 @@ class MainActivity : ComponentActivity(), EventListener {
             return
         }
         val hasNetwork = Helpers.isNetworkAvailable(this)
-        if (!this.hasWindowFocus() || !hasNetwork) {
-            if (!hasNetwork) {
-                setStatus(getString(R.string.status_waiting_for_network))
-            }
+        if (!hasNetwork) {
+            setStatus(getString(R.string.status_waiting_for_network))
             Handler(Looper.getMainLooper()).postDelayed({
                 initialise()
             }, 1000)
@@ -257,7 +255,7 @@ class MainActivity : ComponentActivity(), EventListener {
         var consumed = true
         when (event.eventName) {
             "darkMode" -> setDarkMode(event.newValue as Boolean)
-            "screenAlwaysOn" -> runOnUiThread { setScreenAlwaysOn(event.newValue as Boolean) }
+            "screenAlwaysOn" -> runOnUiThread { setScreenAlwaysOn(event.newValue as Boolean, true) }
             "screenAutoBrightness" -> runOnUiThread { setScreenAutoBrightness(event.newValue as Boolean) }
             "screenBrightness" -> runOnUiThread { setScreenBrightness(event.newValue as Float) }
             else -> consumed = false
@@ -306,10 +304,12 @@ class MainActivity : ComponentActivity(), EventListener {
         }
     }
 
-    fun setScreenAlwaysOn(state: Boolean) {
+    fun setScreenAlwaysOn(state: Boolean, turnScreenOn: Boolean = false) {
         // wake lock
         if (state) {
-            screen.wakeScreen()
+            if (turnScreenOn && !screen.isScreenOn()) {
+                screen.wakeScreen()
+            }
             window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
             window.addFlags(WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD)
             window.addFlags(WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED)
