@@ -77,6 +77,10 @@ class APPConfig(val context: Context) {
         onValueChangedListener(property, oldValue, newValue)
     }
 
+    var continueConversation: Boolean by Delegates.observable(true) { property, oldValue, newValue ->
+        onValueChangedListener(property, oldValue, newValue)
+    }
+
     var notificationVolume: Float by Delegates.observable(DEFAULT_NOTIFICATION_VOLUME) { property, oldValue, newValue ->
         onValueChangedListener(property, oldValue, newValue)
     }

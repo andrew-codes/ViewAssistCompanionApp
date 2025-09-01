@@ -178,13 +178,15 @@ class ClientHandler(private val context: Context, private val server: WyomingTCP
     }
 
     private fun requestInputAudioStream() {
-        log.d("Streaming audio to server for $client_id")
-        pipelineStatus = PipelineStatus.LISTENING
-        server.requestInputAudioStream()
+        if (pipelineStatus != PipelineStatus.LISTENING) {
+            log.d("Streaming audio to server for $client_id")
+            pipelineStatus = PipelineStatus.LISTENING
+            server.requestInputAudioStream()
+        }
     }
 
     private fun releaseInputAudioStream() {
-        if (pipelineStatus == PipelineStatus.STREAMING) {
+        if (pipelineStatus != PipelineStatus.INACTIVE) {
             log.d("Stopping streaming audio to server for $client_id")
             pipelineStatus = PipelineStatus.INACTIVE
             server.releaseInputAudioStream()
@@ -250,7 +252,7 @@ class ClientHandler(private val context: Context, private val server: WyomingTCP
                 }
 
                 "synthesize" -> {
-                    if (event.getProp("text").contains("?")) {
+                    if (event.getProp("text").replace("\n","").endsWith("?")) {
                         lastResponseIsQuestion = true
                     }
                     expectingTTSResponse = true
@@ -282,7 +284,7 @@ class ClientHandler(private val context: Context, private val server: WyomingTCP
                         "played",
                     )
 
-                    if (lastResponseIsQuestion) {
+                    if (config.continueConversation && lastResponseIsQuestion) {
                         sendStartPipeline()
                     } else {
                         resetPipeline()
