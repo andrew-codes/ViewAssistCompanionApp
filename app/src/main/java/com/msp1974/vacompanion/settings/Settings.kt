@@ -185,6 +185,9 @@ class APPConfig(val context: Context) {
         if (settings.has("wake_word_threshold")) {
             wakeWordThreshold = settings.getInt("wake_word_threshold").toFloat() / 10
         }
+        if (settings.has("continue_conversation")) {
+            continueConversation = settings["continue_conversation"] as Boolean
+        }
         if (settings.has("notification_volume")) {
             notificationVolume = settings.getInt("notification_volume").toFloat() / 100
         }
