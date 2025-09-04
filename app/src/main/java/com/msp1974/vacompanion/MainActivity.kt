@@ -108,6 +108,7 @@ class MainActivity : ComponentActivity(), EventListener {
 
         webViewClient = CustomWebViewClient(viewModel)
         webView = CustomWebView.getView(this)
+        webView.initialise()
         webView.webViewClient = webViewClient
         webView.apply {
             layoutParams = ViewGroup.LayoutParams(

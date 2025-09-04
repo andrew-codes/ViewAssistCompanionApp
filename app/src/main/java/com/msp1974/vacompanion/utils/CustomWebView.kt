@@ -28,6 +28,12 @@ class CustomWebView @JvmOverloads constructor(
         }
     }
 
+    fun initialise() {
+        log.d("Initialising WebView")
+        setFocusable(true)
+        setFocusableInTouchMode(true)
+    }
+
     @SuppressLint("ClickableViewAccessibility")
     override fun onTouchEvent(event: MotionEvent): Boolean {
         if (requestDisallow) {
