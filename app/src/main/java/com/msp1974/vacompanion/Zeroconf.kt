@@ -10,10 +10,12 @@ internal class Zeroconf(private val context: Context) {
     private var nsdManager: NsdManager? = null
     private var registrationListener: RegistrationListener? = null
     private val config = APPConfig.getInstance(context)
+    private var isRegistered: Boolean = false
     var serviceName: String? = null
 
     init {
         initializeRegistrationListener()
+        nsdManager = context.getSystemService(Context.NSD_SERVICE) as NsdManager
     }
 
     fun registerService(port: Int) {
@@ -22,27 +24,25 @@ internal class Zeroconf(private val context: Context) {
         serviceInfo.serviceType = "_vaca._tcp."
         serviceInfo.port = port
 
-        nsdManager = context.getSystemService(Context.NSD_SERVICE) as NsdManager
-
         nsdManager!!.registerService(
             serviceInfo, NsdManager.PROTOCOL_DNS_SD, registrationListener
         )
     }
 
     fun unregisterService() {
-        nsdManager = context.getSystemService(Context.NSD_SERVICE) as NsdManager
-        if (registrationListener != null) {
+        if (isRegistered) {
             nsdManager!!.unregisterService(registrationListener)
         }
     }
 
     fun initializeRegistrationListener() {
         registrationListener = object : RegistrationListener {
-            override fun onServiceRegistered(NsdServiceInfo: NsdServiceInfo) {
+            override fun onServiceRegistered(nsdServiceInfo: NsdServiceInfo) {
                 // Save the service name. Android may have changed it in order to
                 // resolve a conflict, so update the name you initially requested
                 // with the name Android actually used.
-                serviceName = NsdServiceInfo.serviceName
+                serviceName = nsdServiceInfo.serviceName
+                isRegistered = true
             }
 
             override fun onRegistrationFailed(serviceInfo: NsdServiceInfo, errorCode: Int) {
@@ -52,6 +52,7 @@ internal class Zeroconf(private val context: Context) {
             override fun onServiceUnregistered(arg0: NsdServiceInfo) {
                 // Service has been unregistered. This only happens when you call
                 // NsdManager.unregisterService() and pass in this listener.
+                isRegistered = false
             }
 
             override fun onUnregistrationFailed(serviceInfo: NsdServiceInfo, errorCode: Int) {
