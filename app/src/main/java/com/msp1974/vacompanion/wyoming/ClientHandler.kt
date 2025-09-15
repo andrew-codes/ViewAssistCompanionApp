@@ -15,6 +15,7 @@ import com.msp1974.vacompanion.settings.APPConfig
 import com.msp1974.vacompanion.utils.DeviceCapabilitiesManager
 import com.msp1974.vacompanion.utils.Event
 import com.msp1974.vacompanion.utils.Logger
+import com.msp1974.vacompanion.utils.ScreenUtils
 import io.github.z4kn4fein.semver.toVersion
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.json.JsonElement
@@ -400,6 +401,10 @@ class ClientHandler(private val context: Context, private val server: WyomingTCP
 
             "refresh" -> {
                 config.eventBroadcaster.notifyEvent(Event("refresh", "", ""))
+            }
+
+            "screen-wake" -> {
+                ScreenUtils(context).wakeScreen()
             }
 
             "wake" -> {
