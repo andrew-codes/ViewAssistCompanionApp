@@ -260,7 +260,16 @@ class ClientHandler(private val context: Context, private val server: WyomingTCP
                 }
 
                 "pipeline-ended" -> {
-                    releaseInputAudioStream()
+                    if (!expectingTTSResponse) {
+                        cancelPipelineNextStageTimeout()
+
+                        if (musicPlayer.isVolumeDucked) {
+                            musicPlayer.unDuckVolume()
+                        }
+                    }
+                    if (pipelineStatus != PipelineStatus.STREAMING) {
+                        releaseInputAudioStream()
+                    }
                 }
 
                 "audio-start" -> {
@@ -286,8 +295,6 @@ class ClientHandler(private val context: Context, private val server: WyomingTCP
 
                     if (config.continueConversation && lastResponseIsQuestion) {
                         sendStartPipeline()
-                    } else {
-                        resetPipeline()
                     }
 
                 }
