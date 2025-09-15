@@ -27,6 +27,12 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.Modifier
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.core.net.toUri
@@ -40,7 +46,9 @@ import com.msp1974.vacompanion.broadcasts.BroadcastSender
 import com.msp1974.vacompanion.service.VABackgroundService
 import com.msp1974.vacompanion.settings.APPConfig
 import com.msp1974.vacompanion.ui.VADialog
-import com.msp1974.vacompanion.ui.layouts.MainLayout
+import com.msp1974.vacompanion.ui.components.VADialog
+import com.msp1974.vacompanion.ui.layouts.ConnectionScreen
+import com.msp1974.vacompanion.ui.layouts.WebViewScreen
 import com.msp1974.vacompanion.ui.theme.AppTheme
 import com.msp1974.vacompanion.utils.AuthUtils
 import com.msp1974.vacompanion.utils.CustomWebView
@@ -71,6 +79,7 @@ class MainActivity : ComponentActivity(), EventListener {
     private lateinit var updater: Updater
     private var screenOrientation: Int = 0
     private var updateProcessComplete: Boolean = true
+    private var firstLoad: Boolean = true
 
     @SuppressLint("HardwareIds", "SetTextI18n")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -105,7 +114,50 @@ class MainActivity : ComponentActivity(), EventListener {
         StrictMode.setThreadPolicy(policy)
 
         setStatus(getString(R.string.status_initialising))
+        keepSplashScreen = false
 
+        setContent {
+            AppTheme(darkMode = false, dynamicColor = false) {
+                val vaUiState by viewModel.vacaState.collectAsState()
+
+                Surface(
+                    modifier = Modifier
+                        .fillMaxSize(),
+                    color = MaterialTheme.colorScheme.background
+                ) {
+                    if (vaUiState.satelliteRunning) {
+                        firstLoad = false
+                        WebViewScreen(webView)
+                    } else {
+                        ConnectionScreen()
+                    }
+                    when {
+                        vaUiState.alertDialog != null -> {
+                            VADialog(
+                                onDismissRequest = {
+                                    vaUiState.alertDialog!!.onDismiss()
+                                },
+                                onConfirmation = {
+                                    vaUiState.alertDialog!!.onConfirm()
+                                },
+                                dialogTitle = vaUiState.alertDialog!!.title,
+                                dialogText = vaUiState.alertDialog!!.message,
+                                confirmText = vaUiState.alertDialog!!.confirmText,
+                                dismissText = vaUiState.alertDialog!!.dismissText
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // Check and get required user permissions
+        log.d("Checking permissions")
+        checkAndRequestPermissions()
+
+    }
+
+    fun initWebView() {
         webViewClient = CustomWebViewClient(viewModel)
         webView = CustomWebView.getView(this)
         webView.initialise()
@@ -117,19 +169,6 @@ class MainActivity : ComponentActivity(), EventListener {
             )
         }
         webViewClient.initialise(webView)
-
-        keepSplashScreen = false
-
-        setContent {
-            AppTheme(darkMode = false, dynamicColor = false) {
-                MainLayout(webView, viewModel)
-            }
-        }
-
-        // Check and get required user permissions
-        log.d("Checking permissions")
-        checkAndRequestPermissions()
-
     }
 
     val onBackButton = object : OnBackPressedCallback(true) {
@@ -137,8 +176,14 @@ class MainActivity : ComponentActivity(), EventListener {
     }
 
     fun setFirebaseUserProperties() {
-        firebase.setUserProperty("webview_version", DeviceCapabilitiesManager(this).getWebViewVersion())
+        val webViewVersion = DeviceCapabilitiesManager(this).getWebViewVersion()
+        firebase.setUserProperty("webview_version", webViewVersion)
         firebase.setUserProperty("device_signature", Helpers.getDeviceName().toString())
+
+        firebase.setCustomKeys(mapOf(
+            "Webview" to webViewVersion,
+            "Device" to Helpers.getDeviceName().toString()
+        ))
     }
 
     fun initialise() {
@@ -163,6 +208,7 @@ class MainActivity : ComponentActivity(), EventListener {
             override fun onReceive(context: Context, intent: Intent) {
                 when (intent.action) {
                     BroadcastSender.SATELLITE_STARTED -> {
+                        initWebView()
                         viewModel.setSatelliteRunning(true)
                         val url = AuthUtils.getURL(webViewClient.getHAUrl())
                         log.d("Loading URL: $url")
@@ -170,6 +216,11 @@ class MainActivity : ComponentActivity(), EventListener {
                     }
                     BroadcastSender.SATELLITE_STOPPED -> {
                         viewModel.setSatelliteRunning(false)
+                        if (webView.parent != null) {
+                            (webView.parent as ViewGroup).removeView(webView)
+                        }
+                        webView.removeAllViews()
+                        webView.destroy()
                     }
                     BroadcastSender.VERSION_MISMATCH -> {
                         runUpdateRoutine()

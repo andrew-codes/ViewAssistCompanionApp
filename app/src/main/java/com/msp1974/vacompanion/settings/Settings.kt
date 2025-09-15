@@ -3,7 +3,6 @@ package com.msp1974.vacompanion.settings
 import android.annotation.SuppressLint
 import android.content.Context
 import android.content.SharedPreferences
-import android.content.pm.PackageInfo
 import android.os.Build
 import android.os.Build.UNKNOWN
 import android.provider.Settings.Secure

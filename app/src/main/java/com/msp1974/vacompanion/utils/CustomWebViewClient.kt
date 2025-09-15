@@ -92,14 +92,10 @@ open class CustomWebViewClient(viewModel: VAViewModel): WebViewClientCompat(), E
     ): Boolean {
         log.e("Webview render process gone: $detail")
         if (detail?.didCrash() == true) {
-            //val swipe = view.parent as SwipeRefreshLayout
-            //swipe.removeAllViews()
-            //view.removeAllViews()
-            //view.destroy()
-            //callback.finishActivity()
+            firebase.addToCrashLog("Render process gone: ${detail.toString()}")
+            firebase.logEvent (FirebaseManager.RENDER_PROCESS_GONE,mapOf("detail" to detail.toString()))
         }
-        firebase.addToCrashLog("Render process gone: ${detail.toString()}")
-        firebase.logEvent (FirebaseManager.RENDER_PROCESS_GONE,mapOf("detail" to detail.toString()))
+
         return super.onRenderProcessGone(view, detail)
     }
 

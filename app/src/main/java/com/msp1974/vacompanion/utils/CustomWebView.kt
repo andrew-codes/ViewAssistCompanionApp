@@ -2,14 +2,11 @@ package com.msp1974.vacompanion.utils
 
 import android.annotation.SuppressLint
 import kotlin.jvm.JvmOverloads
-import timber.log.Timber
 import android.content.Context
 import android.view.MotionEvent
 import android.content.res.Resources.NotFoundException
 import android.util.AttributeSet
 import android.webkit.*
-import com.msp1974.vacompanion.jsinterface.WebAppInterface
-import com.msp1974.vacompanion.jsinterface.WebViewJavascriptInterface
 
 @SuppressLint("SetJavaScriptEnabled", "ViewConstructor")
 class CustomWebView @JvmOverloads constructor(
@@ -23,7 +20,6 @@ class CustomWebView @JvmOverloads constructor(
     private val androidInterface: Any = object : Any() {
         @JavascriptInterface
         fun requestScrollEvents() {
-            Timber.d("WebView.Android.requestScrollEvents")
             requestDisallow = true
         }
     }
@@ -50,7 +46,6 @@ class CustomWebView @JvmOverloads constructor(
             return try {
                 CustomWebView(context)
             } catch (e: NotFoundException) {
-                Timber.e(e, "Caught Lollipop WebView error")
                 CustomWebView(context.applicationContext)
             }
         }

@@ -70,9 +70,6 @@ fun WebView(
                         refreshing = false
                     }
                 }
-                if (webView.parent != null) {
-                    (webView.parent as ViewGroup).removeView(webView)
-                }
                 addView(webView)
             }
         },
