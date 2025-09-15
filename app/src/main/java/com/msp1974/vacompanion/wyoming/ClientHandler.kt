@@ -230,37 +230,42 @@ class ClientHandler(private val context: Context, private val server: WyomingTCP
                 }
 
                 "transcribe" -> {
+                    // Sent when requesting voice command
+                    musicPlayer.duckVolume()
                     requestInputAudioStream()
-                    setPipelineNextStageTimeout(10000)
+                    setPipelineNextStageTimeout(10)
                 }
 
                 "voice-started" -> {
+                    // Sent when detected voice command started
                     cancelPipelineNextStageTimeout()
                 }
 
                 "voice-stopped" -> {
-                    setPipelineNextStageTimeout(5000)
+                    // Sent when detected voice command stopped
+                    setPipelineNextStageTimeout(15)
                 }
 
                 "transcript" -> {
+                    // Sent when STT converted voice command to text
                     releaseInputAudioStream()
                     if (event.getProp("text").lowercase().contains("never mind")) {
-                        resetPipeline()
+                        musicPlayer.unDuckVolume()
                     } else {
-                        // If no response from conversation engine in 5s, timeout
-                        setPipelineNextStageTimeout(5000)
+                        // If no response from conversation engine in 10s, timeout
+                        setPipelineNextStageTimeout(10)
                     }
                 }
 
                 "synthesize" -> {
-                    if (event.getProp("text").replace("\n","").endsWith("?")) {
-                        lastResponseIsQuestion = true
-                    }
+                    // Sent when conversation engine sent response to command
+                    lastResponseIsQuestion = (event.getProp("text").replace("\n","").endsWith("?"))
                     expectingTTSResponse = true
-                    setPipelineNextStageTimeout(5000)
+                    setPipelineNextStageTimeout(10)
                 }
 
                 "pipeline-ended" -> {
+                    // Sent when pipeline has finished
                     if (!expectingTTSResponse) {
                         cancelPipelineNextStageTimeout()
 
@@ -274,6 +279,7 @@ class ClientHandler(private val context: Context, private val server: WyomingTCP
                 }
 
                 "audio-start" -> {
+                    // Sent when audio stream about to start
                     expectingTTSResponse = false  // This is it so reset expecting
                     cancelPipelineNextStageTimeout() // Playing audio, cancel any timeout
                     pipelineStatus = PipelineStatus.STREAMING
@@ -282,10 +288,12 @@ class ClientHandler(private val context: Context, private val server: WyomingTCP
                 }
 
                 "audio-chunk" -> {
+                    // Audio chunk
                     pcmMediaPlayer.writeAudio(event.payload)
                 }
 
                 "audio-stop" -> {
+                    // Sent when all audio chunks sent
                     if (pcmMediaPlayer.isPlaying) {
                         pcmMediaPlayer.stop()
                     }
@@ -296,6 +304,8 @@ class ClientHandler(private val context: Context, private val server: WyomingTCP
 
                     if (config.continueConversation && lastResponseIsQuestion) {
                         sendStartPipeline()
+                    } else {
+                        setPipelineNextStageTimeout(2)
                     }
 
                 }
@@ -311,11 +321,11 @@ class ClientHandler(private val context: Context, private val server: WyomingTCP
         }
     }
 
-    private fun setPipelineNextStageTimeout(duration: Long) {
+    private fun setPipelineNextStageTimeout(duration: Int) {
         cancelPipelineNextStageTimeout()
         handler.postDelayed({
             handlePipelineTimeout()
-        }, duration)
+        }, duration * 1000L)
     }
 
     private fun cancelPipelineNextStageTimeout() {
@@ -331,7 +341,7 @@ class ClientHandler(private val context: Context, private val server: WyomingTCP
 
     private fun resetPipeline() {
         expectingTTSResponse = false
-        lastResponseIsQuestion = false
+
         if (musicPlayer.isVolumeDucked) {
             musicPlayer.unDuckVolume()
         }
