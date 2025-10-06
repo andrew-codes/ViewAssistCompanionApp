@@ -7,11 +7,14 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.hardware.Sensor
 import android.hardware.SensorManager
+import android.hardware.camera2.CameraAccessException
 import android.hardware.camera2.CameraCharacteristics
 import android.hardware.camera2.CameraManager
 import android.os.BatteryManager
 import android.os.Build
 import android.webkit.WebView
+import com.google.firebase.Firebase
+import com.google.firebase.crashlytics.crashlytics
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
@@ -94,15 +97,28 @@ class DeviceCapabilitiesManager(val context: Context) {
     }
 
     fun hasFrontCamera(): Boolean {
-        val cameraManager: CameraManager = context.getSystemService(Context.CAMERA_SERVICE) as CameraManager
-        val cameras = cameraManager.cameraIdList
-        if (cameras.size > 0) {
-            cameraManager.cameraIdList.map { cameraId: String ->
-                val cameraInfo = cameraManager.getCameraCharacteristics(cameraId)
-                if (cameraInfo.get(CameraCharacteristics.LENS_FACING) == CameraCharacteristics.LENS_FACING_FRONT) {
+        val cameraManager = context.getSystemService(Context.CAMERA_SERVICE) as CameraManager
+        try {
+            for (cameraId in cameraManager.cameraIdList) {
+                val characteristics = cameraManager.getCameraCharacteristics(cameraId)
+                val facing = characteristics.get(CameraCharacteristics.LENS_FACING)
+                if (facing != null && facing == CameraCharacteristics.LENS_FACING_FRONT) {
                     return true
                 }
             }
+        } catch (e: CameraAccessException) {
+            // A CameraAccessException here might indicate permissions or
+            // other device-specific issues preventing camera access.
+            // Do not crash the app, but handle gracefully.
+            return false
+        } catch (e: IllegalArgumentException) {
+            // This is crucial. Catches issues like "Illegal argument to HAL module"
+            // if the cameraId or characteristics query is somehow malformed on a specific device.
+            Firebase.crashlytics.recordException(e)
+            return false
+        } catch (e: Exception) {
+            // Catch other unexpected exceptions
+            return false
         }
         return false
     }
