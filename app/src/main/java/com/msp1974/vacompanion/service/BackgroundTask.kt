@@ -71,6 +71,7 @@ internal class BackgroundTaskController (private val context: Context): EventLis
                 startInputAudio(context)
                 audioRoute = AudioRouteOption.DETECT
                 BroadcastSender.sendBroadcast(context, BroadcastSender.SATELLITE_STARTED)
+                zeroConf.unregisterService()
             }
 
             override fun onSatelliteStopped() {
@@ -84,6 +85,7 @@ internal class BackgroundTaskController (private val context: Context): EventLis
                 stopInputAudio()
                 stopOpenWakeWordDetection()
                 stopSensors()
+                zeroConf.registerService(config.serverPort)
             }
 
             override fun onRequestInputAudioStream() {
@@ -106,10 +108,8 @@ internal class BackgroundTaskController (private val context: Context): EventLis
         config.eventBroadcaster.addListener(this)
 
         // Start mdns server
-        if (config.pairedDeviceID == "") {
-            log.d("Starting mdns server")
-            zeroConf.registerService(config.serverPort)
-        }
+        zeroConf.registerService(config.serverPort)
+
         log.d("Background task initialisation completed")
     }
 

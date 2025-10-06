@@ -216,12 +216,9 @@ class MainActivity : ComponentActivity(), EventListener, ComponentCallbacks2 {
                 when (intent.action) {
                     BroadcastSender.SATELLITE_STARTED -> {
                         viewModel.setSatelliteRunning(true)
-                        var url =webViewClient.getHAUrl()
-                        if (config.homeAssistantDashboard != "") {
-                            url = ("$url/${config.homeAssistantDashboard}")
-                        }
+                        val url = AuthUtils.getURL(webViewClient.getHAUrl())
                         log.d("Loading URL: $url")
-                        webView.loadUrl( AuthUtils.getURL(url))
+                        webView.loadUrl(url)
                     }
                     BroadcastSender.SATELLITE_STOPPED -> {
                         viewModel.setSatelliteRunning(false)

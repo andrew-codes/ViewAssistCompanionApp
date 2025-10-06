@@ -35,6 +35,7 @@ class AuthUtils {
             log.d("Getting Auth URL for $baseUrl")
             val url = baseUrl.toUri()
                 .buildUpon()
+                .path("")
                 .appendPath("auth")
                 .appendPath("authorize")
                 .appendQueryParameter("client_id", getClientId())
@@ -49,6 +50,7 @@ class AuthUtils {
         fun getTokenUrl(baseUrl: String): String {
             val url = baseUrl.toUri()
                 .buildUpon()
+                .path("")
                 .appendPath("auth")
                 .appendPath("token")
             return url.build().toString()

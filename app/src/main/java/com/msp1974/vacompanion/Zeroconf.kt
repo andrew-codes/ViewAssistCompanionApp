@@ -19,14 +19,16 @@ internal class Zeroconf(private val context: Context) {
     }
 
     fun registerService(port: Int) {
-        val serviceInfo = NsdServiceInfo()
-        serviceInfo.serviceName = "vaca-${config.uuid}"
-        serviceInfo.serviceType = "_vaca._tcp."
-        serviceInfo.port = port
+        if (!isRegistered) {
+            val serviceInfo = NsdServiceInfo()
+            serviceInfo.serviceName = "vaca-${config.uuid}"
+            serviceInfo.serviceType = "_vaca._tcp."
+            serviceInfo.port = port
 
-        nsdManager!!.registerService(
-            serviceInfo, NsdManager.PROTOCOL_DNS_SD, registrationListener
-        )
+            nsdManager!!.registerService(
+                serviceInfo, NsdManager.PROTOCOL_DNS_SD, registrationListener
+            )
+        }
     }
 
     fun unregisterService() {
