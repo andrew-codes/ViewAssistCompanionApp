@@ -15,7 +15,7 @@ android {
         minSdk = 26
         targetSdk = 36
         versionCode = 1
-        versionName = "0.5.0"
+        versionName = "0.5.1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -58,6 +58,7 @@ dependencies {
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.analytics)
     implementation(libs.firebase.crashlytics.ndk)
+    implementation (libs.androidx.material.icons.extended)
     implementation ("androidx.preference:preference-ktx:1.2.0")
     implementation ("com.jakewharton.timber:timber:5.0.1")
     implementation ("com.microsoft.onnxruntime:onnxruntime-android:1.22.0")
