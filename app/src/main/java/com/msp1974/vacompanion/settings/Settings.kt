@@ -47,6 +47,7 @@ class APPConfig(val context: Context) {
     var homeAssistantConnectedIP: String = ""
     var homeAssistantHTTPPort: Int = DEFAULT_HA_HTTP_PORT
     var homeAssistantURL: String = ""
+    var homeAssistantDashboard: String = ""
 
     var sampleRate: Int = 16000
     var audioChannels: Int = 1
@@ -174,6 +175,9 @@ class APPConfig(val context: Context) {
         }
         if (settings.has("ha_url")) {
             homeAssistantURL = settings["ha_url"] as String
+        }
+        if (settings.has("ha_dashboard")) {
+            homeAssistantDashboard = settings["ha_dashboard"] as String
         }
         if (settings.has("wake_word")) {
             wakeWord = settings["wake_word"] as String

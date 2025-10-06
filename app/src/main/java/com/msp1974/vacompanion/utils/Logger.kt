@@ -41,8 +41,11 @@ class FirebaseManager {
         const val DIAGNOSTIC_POPUP_SHOWN = "diagnostic_popup_shown"
         const val WAKE_WORD_DETECTED = "wake_word_detected"
         const val SATELLITE_ALREADY_RUNNING_MAIN = "satellite_already_running_main"
-        const val RENDER_PROCESS_GONE = "render_process_gone"
+        const val RENDER_PROCESS_KILLED = "render_process_killed"
+        const val RENDER_PROCESS_CRASHED = "render_process_crashed"
         const val MAIN_ACTIVITY_BACKGROUND_TASK_ALREADY_RUNNING = "main_background_task_already_running"
+        const val TRIM_MEMORY_UI_HIDDEN = "trim_memory_ui_hidden"
+        const val TRIM_MEMORY_BACKGROUND = "trim_memory_background"
     }
 
     fun Map<String, Any?>.toBundle(): Bundle = bundleOf(*this.toList().toTypedArray())

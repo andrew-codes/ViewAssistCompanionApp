@@ -21,7 +21,7 @@ import com.msp1974.vacompanion.jsinterface.WebAppInterface
 import com.msp1974.vacompanion.jsinterface.WebViewJavascriptInterface
 import com.msp1974.vacompanion.ui.VAViewModel
 
-open class CustomWebViewClient(viewModel: VAViewModel): WebViewClientCompat(), EventListener  {
+class CustomWebViewClient(viewModel: VAViewModel): WebViewClientCompat()  {
     val log = Logger()
     private val firebase = FirebaseManager.getInstance()
     private lateinit var view: WebView
@@ -39,22 +39,6 @@ open class CustomWebViewClient(viewModel: VAViewModel): WebViewClientCompat(), E
             "externalApp"
         )
 
-        view.settings.apply {
-            javaScriptEnabled = true
-            domStorageEnabled = true
-            javaScriptCanOpenWindowsAutomatically = true
-            cacheMode = WebSettings.LOAD_NO_CACHE
-            allowFileAccess = true
-            allowContentAccess = true
-            setSupportZoom(true)
-            loadWithOverviewMode = true
-            useWideViewPort = true
-            setRenderPriority(WebSettings.RenderPriority.HIGH)
-            mediaPlaybackRequiresUserGesture = false
-            safeBrowsingEnabled = false
-            mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
-        }
-
         val nightModeFlag = resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK
         if (nightModeFlag == Configuration.UI_MODE_NIGHT_YES) {
             if (WebViewFeature.isFeatureSupported(WebViewFeature.FORCE_DARK)) {
@@ -70,20 +54,6 @@ open class CustomWebViewClient(viewModel: VAViewModel): WebViewClientCompat(), E
                 )
             }
         }
-
-        config.eventBroadcaster.addListener(this)
-        view.removeAllViews()
-    }
-
-    fun setDarkMode(isDark: Boolean) {
-        runOnUiThread {
-            if (WebViewFeature.isFeatureSupported(WebViewFeature.FORCE_DARK)) {
-                WebSettingsCompat.setForceDark(
-                    view.settings,
-                    if (isDark) WebSettingsCompat.FORCE_DARK_ON else WebSettingsCompat.FORCE_DARK_OFF
-                )
-            }
-        }
     }
 
     override fun onRenderProcessGone(
@@ -91,12 +61,13 @@ open class CustomWebViewClient(viewModel: VAViewModel): WebViewClientCompat(), E
         detail: RenderProcessGoneDetail?
     ): Boolean {
         log.e("Webview render process gone: $detail")
-        if (detail?.didCrash() == true) {
-            firebase.addToCrashLog("Render process gone: ${detail.toString()}")
-            firebase.logEvent (FirebaseManager.RENDER_PROCESS_GONE,mapOf("detail" to detail.toString()))
+        var reason = FirebaseManager.RENDER_PROCESS_CRASHED
+        if (detail?.didCrash() != true) {
+            reason = FirebaseManager.RENDER_PROCESS_KILLED
         }
-
-        return super.onRenderProcessGone(view, detail)
+        firebase.logEvent (reason, mapOf("detail" to detail.toString()))
+        view.reload()
+        return true
     }
 
     fun getHAUrl(): String {
@@ -249,26 +220,5 @@ open class CustomWebViewClient(viewModel: VAViewModel): WebViewClientCompat(), E
                 return false
             }
         }
-    }
-
-    fun reload() {
-        view.reload()
-    }
-
-    override fun onEventTriggered(event: Event) {
-        when (event.eventName) {
-            "refresh" -> {
-                runOnUiThread {
-                    reload()
-                }
-            }
-        }
-    }
-
-    fun runOnUiThread(func: () -> Unit) {
-        Handler(Looper.getMainLooper()).post({
-            func()
-        })
-
     }
 }

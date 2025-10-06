@@ -70,7 +70,12 @@ fun WebView(
                         refreshing = false
                     }
                 }
-                addView(webView)
+                if (webView.parent != null) {
+                    (webView.parent as ViewGroup).removeView(webView)
+                }
+                addView(webView).apply {
+                    tag = "vaWebView"
+                }
             }
         },
         update = { view ->

@@ -6,6 +6,7 @@ import android.app.AlertDialog
 import android.app.NotificationManager
 import android.app.UiModeManager
 import android.content.BroadcastReceiver
+import android.content.ComponentCallbacks2
 import android.content.Context
 import android.content.DialogInterface
 import android.content.Intent
@@ -41,6 +42,8 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
+import androidx.webkit.WebSettingsCompat
+import androidx.webkit.WebViewFeature
 import com.msp1974.vacompanion.ui.VAViewModel
 import com.msp1974.vacompanion.broadcasts.BroadcastSender
 import com.msp1974.vacompanion.service.VABackgroundService
@@ -65,7 +68,7 @@ import kotlin.concurrent.thread
 import kotlin.getValue
 
 
-class MainActivity : ComponentActivity(), EventListener {
+class MainActivity : ComponentActivity(), EventListener, ComponentCallbacks2 {
     val viewModel: VAViewModel by viewModels()
 
     private val log = Logger()
@@ -98,6 +101,10 @@ class MainActivity : ComponentActivity(), EventListener {
         screen = ScreenUtils(this)
         updater = Updater(this)
 
+        webView = CustomWebView.getView(this)
+        webViewClient = CustomWebViewClient(viewModel)
+        webView.webViewClient = webViewClient
+
         onBackPressedDispatcher.addCallback(this, onBackButton)
         setFirebaseUserProperties()
 
@@ -115,6 +122,9 @@ class MainActivity : ComponentActivity(), EventListener {
 
         setStatus(getString(R.string.status_initialising))
         keepSplashScreen = false
+
+        // Init webview setup
+        initWebView()
 
         setContent {
             AppTheme(darkMode = false, dynamicColor = false) {
@@ -158,11 +168,8 @@ class MainActivity : ComponentActivity(), EventListener {
     }
 
     fun initWebView() {
-        webViewClient = CustomWebViewClient(viewModel)
-        webView = CustomWebView.getView(this)
-        webView.initialise()
-        webView.webViewClient = webViewClient
         webView.apply {
+            initialise()
             layoutParams = ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT
@@ -208,19 +215,16 @@ class MainActivity : ComponentActivity(), EventListener {
             override fun onReceive(context: Context, intent: Intent) {
                 when (intent.action) {
                     BroadcastSender.SATELLITE_STARTED -> {
-                        initWebView()
                         viewModel.setSatelliteRunning(true)
-                        val url = AuthUtils.getURL(webViewClient.getHAUrl())
+                        var url =webViewClient.getHAUrl()
+                        if (config.homeAssistantDashboard != "") {
+                            url = ("$url/${config.homeAssistantDashboard}")
+                        }
                         log.d("Loading URL: $url")
-                        webView.loadUrl(url)
+                        webView.loadUrl( AuthUtils.getURL(url))
                     }
                     BroadcastSender.SATELLITE_STOPPED -> {
                         viewModel.setSatelliteRunning(false)
-                        if (webView.parent != null) {
-                            (webView.parent as ViewGroup).removeView(webView)
-                        }
-                        webView.removeAllViews()
-                        webView.destroy()
                     }
                     BroadcastSender.VERSION_MISMATCH -> {
                         runUpdateRoutine()
@@ -306,7 +310,8 @@ class MainActivity : ComponentActivity(), EventListener {
     override fun onEventTriggered(event: Event) {
         var consumed = true
         when (event.eventName) {
-            "darkMode" -> setDarkMode(event.newValue as Boolean)
+            "refresh" -> runOnUiThread { webView.reload() }
+            "darkMode" -> runOnUiThread { setDarkMode(event.newValue as Boolean) }
             "screenAlwaysOn" -> runOnUiThread { setScreenAlwaysOn(event.newValue as Boolean, true) }
             "screenAutoBrightness" -> runOnUiThread { setScreenAutoBrightness(event.newValue as Boolean) }
             "screenBrightness" -> runOnUiThread { setScreenBrightness(event.newValue as Float) }
@@ -329,7 +334,12 @@ class MainActivity : ComponentActivity(), EventListener {
         }
 
         // Set webview dark mode if supported for older devices
-        webViewClient.setDarkMode(isDark)
+        if (WebViewFeature.isFeatureSupported(WebViewFeature.FORCE_DARK)) {
+            WebSettingsCompat.setForceDark(
+                webView.settings,
+                if (isDark) WebSettingsCompat.FORCE_DARK_ON else WebSettingsCompat.FORCE_DARK_OFF
+            )
+        }
     }
 
     fun setScreenBrightness(brightness: Float) {
@@ -584,6 +594,25 @@ class MainActivity : ComponentActivity(), EventListener {
     private val onUpdateAppActivityResult = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
         updateProcessComplete = true
         setStatus("Incompatible version. In app update not available")
+    }
+
+    override fun onTrimMemory(level: Int) {
+        // Try and prevent the app being killed by memory manager
+        if (level >= TRIM_MEMORY_UI_HIDDEN) {
+            // Release memory related to UI elements, such as bitmap caches.
+            firebase.logEvent(FirebaseManager.TRIM_MEMORY_UI_HIDDEN, mapOf())
+            Runtime.getRuntime().gc()
+
+        }
+
+        if (level >= TRIM_MEMORY_BACKGROUND) {
+            // Release memory related to background processing, such as by
+            // closing a database connection.
+            firebase.logEvent(FirebaseManager.TRIM_MEMORY_BACKGROUND, mapOf())
+            Runtime.getRuntime().gc()
+        }
+
+        super.onTrimMemory(level)
     }
 }
 

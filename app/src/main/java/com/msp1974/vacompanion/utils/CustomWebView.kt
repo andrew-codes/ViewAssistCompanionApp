@@ -28,6 +28,24 @@ class CustomWebView @JvmOverloads constructor(
         log.d("Initialising WebView")
         setFocusable(true)
         setFocusableInTouchMode(true)
+
+        setRendererPriorityPolicy(RENDERER_PRIORITY_IMPORTANT, false)
+        setLayerType(LAYER_TYPE_HARDWARE, null)
+
+        settings.apply {
+            javaScriptEnabled = true
+            domStorageEnabled = true
+            javaScriptCanOpenWindowsAutomatically = true
+            allowFileAccess = true
+            allowContentAccess = true
+            setSupportZoom(true)
+            loadWithOverviewMode = true
+            useWideViewPort = true
+            setRenderPriority(WebSettings.RenderPriority.HIGH)
+            mediaPlaybackRequiresUserGesture = false
+            safeBrowsingEnabled = false
+            mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+        }
     }
 
     @SuppressLint("ClickableViewAccessibility")

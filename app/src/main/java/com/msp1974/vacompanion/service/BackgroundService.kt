@@ -2,6 +2,9 @@ package com.msp1974.vacompanion.service
 
 import android.Manifest
 import android.app.KeyguardManager
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import android.app.Service
 import android.content.Context
 import android.content.Intent
@@ -10,6 +13,7 @@ import android.content.pm.ServiceInfo
 import android.net.wifi.WifiManager
 import android.os.IBinder
 import androidx.core.app.ActivityCompat
+import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
 import com.google.firebase.Firebase
@@ -18,7 +22,6 @@ import com.msp1974.vacompanion.MainActivity
 import com.msp1974.vacompanion.R
 import com.msp1974.vacompanion.settings.APPConfig
 import com.msp1974.vacompanion.utils.Logger
-import com.msp1974.vacompanion.utils.NotificationUtils
 
 
 class VABackgroundService : Service() {
@@ -39,27 +42,36 @@ class VABackgroundService : Service() {
         config = APPConfig.getInstance(this)
 
         // wifi lock
-        val wifiManager = applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
+        val wifiManager = applicationContext.getSystemService(WIFI_SERVICE) as WifiManager
         wifiLock = wifiManager.createWifiLock(WifiManager.WIFI_MODE_FULL, "vacompanion.VABackgroundService:wifiLock")
         // Some Amazon devices are not seeing this permission so we are trying to check
         val permission = "android.permission.DISABLE_KEYGUARD"
         val checkSelfPermission = ContextCompat.checkSelfPermission(this@VABackgroundService, permission)
         if (checkSelfPermission == PackageManager.PERMISSION_GRANTED) {
-            val keyguardManager = getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager
+            val keyguardManager = getSystemService(KEYGUARD_SERVICE) as KeyguardManager
             keyguardLock = keyguardManager.newKeyguardLock("ALARM_KEYBOARD_LOCK_TAG")
             keyguardLock!!.disableKeyguard()
         }
+    }
 
-        // Set notification
-        notificationService()
+    private fun createNotification(): Notification {
+        val channelId = "va_service_channel"
+        val notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
+        val channel = NotificationChannel(channelId, "VA Service", NotificationManager.IMPORTANCE_LOW)
+        notificationManager.createNotificationChannel(channel)
+        return NotificationCompat.Builder(this, channelId)
+            .setContentTitle("VACA Background Service")
+            .setContentText("Running background tasks...")
+            .setSmallIcon(R.drawable.splash_image)
+            .build()
     }
 
     /**
-     * The Notification is mandatory for background services
-     * */
-    private fun notificationService() {
-        val notificationUtils = NotificationUtils(applicationContext, application.resources)
-        val notification = notificationUtils.createNotification(getString(R.string.service_notification_title), getString(R.string.service_notification_message))
+    * Main process for the service
+    * */
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        Firebase.crashlytics.log("Background service starting")
+        if (!checkIfPermissionIsGranted()) return START_NOT_STICKY
 
         //need core 1.12 and higher and SDK 30 and higher
         var requires: Int = 0
@@ -70,6 +82,7 @@ class VABackgroundService : Service() {
             requires += ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
         }
 
+        val notification = createNotification()
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
             log.d("Running in foreground ServiceCompat mode")
             ServiceCompat.startForeground(
@@ -80,14 +93,7 @@ class VABackgroundService : Service() {
             log.d("Running in foreground service")
             startForeground(1, notification)
         }
-    }
 
-    /**
-     * Main process for the service
-     * */
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        Firebase.crashlytics.log("Background service starting")
-        if (!checkIfPermissionIsGranted()) return START_NOT_STICKY
         if (!wifiLock!!.isHeld) {
             wifiLock!!.acquire()
         }
