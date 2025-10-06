@@ -7,17 +7,20 @@ import ai.onnxruntime.OrtSession
 import ai.onnxruntime.OrtSession.SessionOptions
 import android.content.Context
 import android.content.res.AssetManager
+import android.os.Environment
 import com.msp1974.vacompanion.settings.APPConfig
 import com.msp1974.vacompanion.utils.Logger
+import com.msp1974.vacompanion.utils.WakeWord
+import com.msp1974.vacompanion.utils.WakeWords
 import java.io.IOException
 import java.nio.FloatBuffer
 import java.util.ArrayDeque
 import java.util.Collections
 import java.util.Locale
 import java.util.Random
+import kotlin.io.path.Path
+import kotlin.io.path.readBytes
 import kotlin.math.max
-
-enum class SupportedWakewords { alexa, hey_jarvis, hey_mycroft, hey_rhasspy, ok_nabu, ok_computer }
 
 class ONNXModelRunner(var assetManager: AssetManager, wakeWord: String) {
     private var log = Logger()
@@ -31,8 +34,13 @@ class ONNXModelRunner(var assetManager: AssetManager, wakeWord: String) {
 
     init {
         try {
-            val wakeWordFile = wakeWord.lowercase() + ".onnx"
-            ort_session = ort_env.createSession(readModelFile(assetManager, wakeWordFile))
+            // Get wakeword from wakewords - read from disk for latest version
+            val wakeWords = WakeWords().getWakeWords()
+            if (wakeWord in wakeWords.keys) {
+                val wakeWordInfo = wakeWords[wakeWord]!!
+                ort_session = ort_env.createSession(readModelFile(assetManager, wakeWordInfo.fileName, wakeWordInfo.custom))
+            }
+
         } catch (e: IOException) {
             log.e("Error reading model file: $e")
             throw RuntimeException(e)
@@ -181,7 +189,12 @@ class ONNXModelRunner(var assetManager: AssetManager, wakeWord: String) {
     }
 
     @Throws(IOException::class)
-    private fun readModelFile(assetManager: AssetManager, filename: String): ByteArray {
+    private fun readModelFile(assetManager: AssetManager, filename: String, isCustom: Boolean = false): ByteArray {
+        if (isCustom) {
+            val downloadPath = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+            val file = Path(downloadPath.toString(), "vaca", filename)
+            return file.readBytes()
+        }
         assetManager.open(filename).use { `is` ->
             val buffer = ByteArray(`is`.available())
             `is`.read(buffer)
@@ -221,10 +234,6 @@ class ONNXModelRunner(var assetManager: AssetManager, wakeWord: String) {
             }
 
             return transformedArray
-        }
-
-        fun getWakeWords(): List<String> {
-            return enumValues<SupportedWakewords>().map { it.name }
         }
     }
 }

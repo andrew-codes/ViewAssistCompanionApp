@@ -16,6 +16,7 @@ import com.msp1974.vacompanion.utils.DeviceCapabilitiesManager
 import com.msp1974.vacompanion.utils.Event
 import com.msp1974.vacompanion.utils.Logger
 import com.msp1974.vacompanion.utils.ScreenUtils
+import com.msp1974.vacompanion.utils.WakeWords
 import io.github.z4kn4fein.semver.toVersion
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.json.JsonElement
@@ -455,6 +456,7 @@ class ClientHandler(private val context: Context, private val server: WyomingTCP
 
     @OptIn(ExperimentalSerializationApi::class)
     fun sendInfo() {
+        val wakeWords = WakeWords().getWakeWords()
         sendEvent(
             "info",
             buildJsonObject {
@@ -473,9 +475,9 @@ class ClientHandler(private val context: Context, private val server: WyomingTCP
                             }
                             put("installed", true)
                             putJsonArray("models") {
-                                addAll(ONNXModelRunner.Companion.getWakeWords().map {
+                                addAll(wakeWords.map {
                                     buildJsonObject {
-                                        put("name", it)
+                                        put("name", it.key)
                                         putJsonObject("attribution") {
                                             put("name", "")
                                             put("url", "")
@@ -484,7 +486,7 @@ class ClientHandler(private val context: Context, private val server: WyomingTCP
                                         putJsonArray("languages") {
                                             addAll(listOf("en"))
                                         }
-                                        put("phrase", it)
+                                        put("phrase", it.value.name)
                                     }
                                 })
                             }
