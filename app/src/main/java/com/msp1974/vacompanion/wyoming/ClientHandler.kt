@@ -634,7 +634,6 @@ class ClientHandler(private val context: Context, private val server: WyomingTCP
                     val dataBytes = ByteArray(dataLength)
                     var i = 0
                     while (reader.available() < dataLength && i < 100) {
-                        log.w("Data not fully received")
                         Thread.sleep(10)
                         i++
                     }
