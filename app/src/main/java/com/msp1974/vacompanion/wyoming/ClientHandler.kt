@@ -7,6 +7,7 @@ import android.content.IntentFilter
 import android.os.Handler
 import android.os.Looper
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
+import com.msp1974.vacompanion.audio.Alarm
 import com.msp1974.vacompanion.openwakeword.ONNXModelRunner
 import com.msp1974.vacompanion.audio.PCMMediaPlayer
 import com.msp1974.vacompanion.audio.VAMediaPlayer
@@ -26,6 +27,7 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
+import org.json.JSONException
 import org.json.JSONObject
 import java.io.DataInputStream
 import java.io.DataOutputStream
@@ -53,7 +55,7 @@ class ClientHandler(private val context: Context, private val server: WyomingTCP
 
     private var pingTimer: Timer = Timer()
 
-
+    private var alarmPlayer: Alarm = Alarm(context)
     private var pcmMediaPlayer: PCMMediaPlayer = PCMMediaPlayer(context)
     private var musicPlayer: VAMediaPlayer = VAMediaPlayer.getInstance(context)
 
@@ -66,7 +68,7 @@ class ClientHandler(private val context: Context, private val server: WyomingTCP
             if (satelliteStatus == SatelliteState.RUNNING) {
                 Thread(object : Runnable {
                     override fun run() {
-                        musicPlayer.duckVolume()
+                        volumeDucking("all", true)
                         sendWakeWordDetection()
                         sendStartPipeline()
                     }
@@ -166,6 +168,11 @@ class ClientHandler(private val context: Context, private val server: WyomingTCP
             if (pipelineStatus == PipelineStatus.LISTENING) {
                 releaseInputAudioStream()
             }
+
+            // Stop media players
+            alarmPlayer.stopAlarm()
+            musicPlayer.stop()
+
             pipelineStatus = PipelineStatus.INACTIVE
             satelliteStatus = SatelliteState.STOPPED
             server.pipelineClient = null
@@ -232,7 +239,7 @@ class ClientHandler(private val context: Context, private val server: WyomingTCP
 
                 "transcribe" -> {
                     // Sent when requesting voice command
-                    musicPlayer.duckVolume()
+                    volumeDucking("all", true)
                     requestInputAudioStream()
                     setPipelineNextStageTimeout(10)
                 }
@@ -251,7 +258,7 @@ class ClientHandler(private val context: Context, private val server: WyomingTCP
                     // Sent when STT converted voice command to text
                     releaseInputAudioStream()
                     if (event.getProp("text").lowercase().contains("never mind")) {
-                        musicPlayer.unDuckVolume()
+                        volumeDucking("all", false)
                     } else {
                         // If no response from conversation engine in 10s, timeout
                         setPipelineNextStageTimeout(10)
@@ -269,10 +276,7 @@ class ClientHandler(private val context: Context, private val server: WyomingTCP
                     // Sent when pipeline has finished
                     if (!expectingTTSResponse) {
                         cancelPipelineNextStageTimeout()
-
-                        if (musicPlayer.isVolumeDucked) {
-                            musicPlayer.unDuckVolume()
-                        }
+                        volumeDucking("all", false)
                     }
                     if (pipelineStatus != PipelineStatus.STREAMING) {
                         releaseInputAudioStream()
@@ -284,7 +288,7 @@ class ClientHandler(private val context: Context, private val server: WyomingTCP
                     expectingTTSResponse = false  // This is it so reset expecting
                     cancelPipelineNextStageTimeout() // Playing audio, cancel any timeout
                     pipelineStatus = PipelineStatus.STREAMING
-                    musicPlayer.duckVolume()  // Duck here if announcement
+                    volumeDucking("all", true)  // Duck here if announcement
                     pcmMediaPlayer.play()
                 }
 
@@ -343,9 +347,8 @@ class ClientHandler(private val context: Context, private val server: WyomingTCP
     private fun resetPipeline() {
         expectingTTSResponse = false
 
-        if (musicPlayer.isVolumeDucked) {
-            musicPlayer.unDuckVolume()
-        }
+        volumeDucking("all", false)
+
         if (pipelineStatus != PipelineStatus.STREAMING) {
             releaseInputAudioStream()
         }
@@ -420,11 +423,53 @@ class ClientHandler(private val context: Context, private val server: WyomingTCP
 
             "wake" -> {
                 thread{
-                    musicPlayer.duckVolume()
+                    volumeDucking("all", true)
                     sendWakeWordDetection()
                     sendStartPipeline()
                 }
             }
+            "alarm" -> {
+                if (event.getProp("payload") != "") {
+                    val values = JSONObject(event.getProp("payload"))
+                    val active = try {
+                        values.getBoolean("activate")
+                    } catch (ex: JSONException) {
+                        false
+                    }
+                    if (active) {
+                        volumeDucking("music", true)
+                        alarmPlayer.startAlarm()
+                    } else {
+                        alarmPlayer.stopAlarm()
+                        volumeDucking("music", false)
+                    }
+                }
+            }
+        }
+    }
+
+    private fun volumeDucking(type: String, active: Boolean) {
+        if (active) {
+            if (type == "alarm") {
+                alarmPlayer.duckVolume()
+            } else if (type == "music") {
+                musicPlayer.duckVolume()
+            } else {
+                alarmPlayer.duckVolume()
+                musicPlayer.duckVolume()
+            }
+        } else {
+            if (type == "alarm") {
+                alarmPlayer.unDuckVolume()
+            } else if (type == "music") {
+                musicPlayer.unDuckVolume()
+            } else {
+                alarmPlayer.unDuckVolume()
+                if (!alarmPlayer.isSounding) {
+                    musicPlayer.unDuckVolume()
+                }
+            }
+
         }
     }
 
