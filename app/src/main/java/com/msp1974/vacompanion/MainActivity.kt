@@ -66,6 +66,8 @@ import com.msp1974.vacompanion.utils.ScreenUtils
 import com.msp1974.vacompanion.utils.Updater
 import kotlin.concurrent.thread
 import kotlin.getValue
+import kotlin.math.max
+import kotlin.math.min
 
 
 class MainActivity : ComponentActivity(), EventListener, ComponentCallbacks2 {
@@ -216,6 +218,7 @@ class MainActivity : ComponentActivity(), EventListener, ComponentCallbacks2 {
                 when (intent.action) {
                     BroadcastSender.SATELLITE_STARTED -> {
                         viewModel.setSatelliteRunning(true)
+                        setZoomLevel(config.zoomLevel)
                         val url = AuthUtils.getURL(webViewClient.getHAUrl())
                         log.d("Loading URL: $url")
                         webView.loadUrl(url)
@@ -308,6 +311,7 @@ class MainActivity : ComponentActivity(), EventListener, ComponentCallbacks2 {
         var consumed = true
         when (event.eventName) {
             "refresh" -> runOnUiThread { webView.reload() }
+            "zoomLevel" -> runOnUiThread { setZoomLevel(event.newValue as Int) }
             "darkMode" -> runOnUiThread { setDarkMode(event.newValue as Boolean) }
             "screenAlwaysOn" -> runOnUiThread { setScreenAlwaysOn(event.newValue as Boolean, true) }
             "screenAutoBrightness" -> runOnUiThread { setScreenAutoBrightness(event.newValue as Boolean) }
@@ -317,6 +321,16 @@ class MainActivity : ComponentActivity(), EventListener, ComponentCallbacks2 {
         if (consumed) {
             log.d("MainActivity - Event: ${event.eventName} - ${event.newValue}")
         }
+    }
+
+    fun setZoomLevel(level: Int) {
+        if (level == 0) {
+            webView.settings.useWideViewPort = true
+        } else {
+            webView.settings.useWideViewPort = false
+            webView.setInitialScale(level)
+        }
+
     }
 
     fun setDarkMode(isDark: Boolean) {

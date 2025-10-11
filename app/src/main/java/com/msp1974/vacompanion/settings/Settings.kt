@@ -134,6 +134,11 @@ class APPConfig(val context: Context) {
         onValueChangedListener(property, oldValue, newValue)
     }
 
+    var zoomLevel: Int by Delegates.observable(100) { property, oldValue, newValue ->
+        onValueChangedListener(property, oldValue, newValue)
+    }
+
+
     // SharedPreferences
     var canSetScreenWritePermission: Boolean
         get() = this.sharedPrefs.getBoolean("can_set_screen_write_permission", true)
@@ -232,6 +237,9 @@ class APPConfig(val context: Context) {
         }
         if (settings.has("min_required_apk_version")) {
             minRequiredApkVersion = settings.getString("min_required_apk_version")
+        }
+        if (settings.has("zoom_level")) {
+            zoomLevel = settings.getInt("zoom_level")
         }
         Firebase.crashlytics.log("Settings update")
     }

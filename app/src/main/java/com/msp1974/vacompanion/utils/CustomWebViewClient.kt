@@ -3,6 +3,7 @@ package com.msp1974.vacompanion.utils
 import android.annotation.SuppressLint
 import android.content.DialogInterface
 import android.content.res.Configuration
+import android.graphics.Bitmap
 import android.net.http.SslError
 import android.os.Handler
 import android.os.Looper
@@ -20,6 +21,7 @@ import com.msp1974.vacompanion.jsinterface.ExternalAuthCallback
 import com.msp1974.vacompanion.jsinterface.WebAppInterface
 import com.msp1974.vacompanion.jsinterface.WebViewJavascriptInterface
 import com.msp1974.vacompanion.ui.VAViewModel
+import kotlin.math.max
 
 class CustomWebViewClient(viewModel: VAViewModel): WebViewClientCompat()  {
     val log = Logger()

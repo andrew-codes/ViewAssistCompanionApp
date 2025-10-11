@@ -38,13 +38,13 @@ class CustomWebView @JvmOverloads constructor(
             javaScriptCanOpenWindowsAutomatically = true
             allowFileAccess = true
             allowContentAccess = true
-            setSupportZoom(true)
-            loadWithOverviewMode = true
-            useWideViewPort = true
-            setRenderPriority(WebSettings.RenderPriority.HIGH)
             mediaPlaybackRequiresUserGesture = false
             safeBrowsingEnabled = false
             mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+            setSupportZoom(true)
+            builtInZoomControls = false
+            useWideViewPort = false
+            loadWithOverviewMode = true
         }
     }
 
