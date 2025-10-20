@@ -14,6 +14,7 @@ import com.msp1974.vacompanion.utils.WakeWord
 import com.msp1974.vacompanion.utils.WakeWords
 import java.io.IOException
 import java.nio.FloatBuffer
+import java.nio.file.AccessDeniedException
 import java.util.ArrayDeque
 import java.util.Collections
 import java.util.Locale
@@ -22,7 +23,7 @@ import kotlin.io.path.Path
 import kotlin.io.path.readBytes
 import kotlin.math.max
 
-class ONNXModelRunner(var assetManager: AssetManager, wakeWord: String) {
+class ONNXModelRunner(var context: Context, var assetManager: AssetManager, wakeWord: String) {
     private var log = Logger()
     var ort_session: OrtSession? = null
     var ort_env: OrtEnvironment = OrtEnvironment.getEnvironment()
@@ -35,7 +36,7 @@ class ONNXModelRunner(var assetManager: AssetManager, wakeWord: String) {
     init {
         try {
             // Get wakeword from wakewords - read from disk for latest version
-            val wakeWords = WakeWords().getWakeWords()
+            val wakeWords = WakeWords(context).getWakeWords()
             if (wakeWord in wakeWords.keys) {
                 val wakeWordInfo = wakeWords[wakeWord]!!
                 ort_session = ort_env.createSession(readModelFile(assetManager, wakeWordInfo.fileName, wakeWordInfo.custom))
@@ -191,9 +192,12 @@ class ONNXModelRunner(var assetManager: AssetManager, wakeWord: String) {
     @Throws(IOException::class)
     private fun readModelFile(assetManager: AssetManager, filename: String, isCustom: Boolean = false): ByteArray {
         if (isCustom) {
-            val downloadPath = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
-            val file = Path(downloadPath.toString(), "vaca", filename)
-            return file.readBytes()
+            try {
+                val file = Path(filename)
+                return file.readBytes()
+            } catch (e: AccessDeniedException) {
+                // Likely Android 10+
+            }
         }
         assetManager.open(filename).use { `is` ->
             val buffer = ByteArray(`is`.available())

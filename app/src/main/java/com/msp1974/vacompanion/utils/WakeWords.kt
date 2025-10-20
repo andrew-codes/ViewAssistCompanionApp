@@ -1,14 +1,17 @@
 package com.msp1974.vacompanion.utils
 
+import android.content.Context
+import android.os.Build
 import android.os.Environment
 import com.msp1974.vacompanion.utils.AuthUtils.Companion.log
 import kotlin.io.path.Path
+import kotlin.io.path.absolutePathString
 import kotlin.io.path.forEachDirectoryEntry
 import kotlin.io.path.isDirectory
 
 data class WakeWord(val name: String, val fileName: String, val custom: Boolean = false)
 
-class WakeWords {
+class WakeWords(val context: Context) {
     var availableWakeWords = mapOf(
         "alexa" to WakeWord("Alexa", "alexa.onnx"),
         "hey_jarvis" to WakeWord("Hey Jarvis", "hey_jarvis.onnx"),
@@ -21,16 +24,28 @@ class WakeWords {
     fun getCustomWakeWords(path: String): Map<String, WakeWord> {
         val customWakeWords = mutableMapOf<String, WakeWord>()
         val downloadPath = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
-        val vacaDir = Path(downloadPath.toString(), path)
+        val vacaDownloadDir = Path(downloadPath.toString(), path)
+        val vacaFilesDir = Path(context.filesDir.toString(), path)
 
-        if (vacaDir.isDirectory()) {
-            log.d("Custom wake words directory found")
-            vacaDir.forEachDirectoryEntry( "*.onnx", { entry ->
+        if (vacaDownloadDir.isDirectory()) {
+            log.d("Custom wake words directory found in Downloads - ${vacaDownloadDir.toFile().absolutePath}")
+            vacaDownloadDir.forEachDirectoryEntry( "*.onnx", { entry ->
                 log.d("Found custom wake word: ${entry.fileName}")
                 val key = entry.fileName.toString().replace(".onnx", "").lowercase()
                 val name = key.replace("_", " ")
 
-                customWakeWords[key] = WakeWord(name.capitalizeWords(), entry.fileName.toString(), true)
+                customWakeWords[key] = WakeWord(name.capitalizeWords(), entry.absolutePathString(), true)
+            })
+        }
+
+        if (vacaFilesDir.isDirectory()) {
+            log.d("Custom wake words directory found in App files - ${vacaFilesDir.toFile().absolutePath}")
+            vacaFilesDir.forEachDirectoryEntry( "*.onnx", { entry ->
+                log.d("Found custom wake word: ${entry.fileName}")
+                val key = entry.fileName.toString().replace(".onnx", "").lowercase()
+                val name = key.replace("_", " ")
+
+                customWakeWords[key] = WakeWord(name.capitalizeWords(), entry.absolutePathString(), true)
             })
         }
         return customWakeWords

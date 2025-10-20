@@ -290,7 +290,7 @@ internal class BackgroundTaskController (private val context: Context): EventLis
         // Init wake word detection
         log.i("Starting wake word detection")
         try {
-            modelRunner = ONNXModelRunner(assetManager, config.wakeWord)
+            modelRunner = ONNXModelRunner(context, assetManager, config.wakeWord)
             model = Model(context, modelRunner)
         } catch (e: Exception) {
             log.d("Error starting wake word detection: ${e.message.toString()}")

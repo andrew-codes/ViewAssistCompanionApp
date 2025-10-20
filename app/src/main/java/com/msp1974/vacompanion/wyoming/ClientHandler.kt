@@ -501,7 +501,7 @@ class ClientHandler(private val context: Context, private val server: WyomingTCP
 
     @OptIn(ExperimentalSerializationApi::class)
     fun sendInfo() {
-        val wakeWords = WakeWords().getWakeWords()
+        val wakeWords = WakeWords(context).getWakeWords()
         sendEvent(
             "info",
             buildJsonObject {
