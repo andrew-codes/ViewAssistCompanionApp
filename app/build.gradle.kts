@@ -15,7 +15,7 @@ android {
         minSdk = 26
         targetSdk = 36
         versionCode = 1
-        versionName = "0.6.0"
+        versionName = "0.6.1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -66,7 +66,6 @@ dependencies {
     implementation ("com.squareup.okhttp3:okhttp:5.1.0")
     implementation (libs.androidx.webkit)
     implementation(libs.kotlinx.serialization.json)
-    implementation(libs.ui)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
