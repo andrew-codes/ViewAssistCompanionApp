@@ -1,6 +1,6 @@
 [versions]
-agp = "8.12.2"
-firebaseBom = "34.3.0"
+agp = "8.13.0"
+firebaseBom = "34.4.0"
 kotlin = "2.2.20"
 kotlinSerialization = "1.9.0"
 coreKtx = "1.17.0"
@@ -10,11 +10,11 @@ espressoCore = "3.7.0"
 lifecycleRuntimeKtx = "2.9.4"
 lifecycleViewmodelCompose = "2.9.4"
 activityCompose = "1.11.0"
-composeBom = "2025.09.01"
+composeBom = "2025.10.00"
 material3 = "1.4.0"
 materialIconsExtended = "1.7.8"
 splash ="1.0.1"
-ui = "1.9.2"
+ui = "1.9.3"
 webkit = "1.14.0"
 
 [libraries]
