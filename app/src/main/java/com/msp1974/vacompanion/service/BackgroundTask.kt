@@ -23,6 +23,7 @@ import com.msp1974.vacompanion.utils.EventListener
 import com.msp1974.vacompanion.utils.FirebaseManager
 import com.msp1974.vacompanion.utils.Helpers
 import com.msp1974.vacompanion.utils.Logger
+import com.msp1974.vacompanion.utils.ScreenUtils
 import com.msp1974.vacompanion.wyoming.WyomingCallback
 import com.msp1974.vacompanion.wyoming.WyomingTCPServer
 import kotlinx.serialization.json.buildJsonObject
@@ -52,7 +53,6 @@ internal class BackgroundTaskController (private val context: Context): EventLis
     lateinit var server: WyomingTCPServer
 
     var debounce: Int = 0
-    var vadDebounce: Int = 25
 
     object Constants {
         const val DEBOUNCE_COUNTER = 20
@@ -230,11 +230,18 @@ internal class BackgroundTaskController (private val context: Context): EventLis
 
                 if (res >= config.wakeWordThreshold) {
                     log.i("Wake word detected at $res, theshold is ${config.wakeWordThreshold}")
-                    firebase.logEvent(FirebaseManager.WAKE_WORD_DETECTED, mapOf(
-                        "wake_word" to config.wakeWord,
-                        "threshold" to config.wakeWordThreshold.toString(),
-                        "prediction" to res.toString()
-                    ))
+                    firebase.logEvent(
+                        FirebaseManager.WAKE_WORD_DETECTED, mapOf(
+                            "wake_word" to config.wakeWord,
+                            "threshold" to config.wakeWordThreshold.toString(),
+                            "prediction" to res.toString()
+                        )
+                    )
+
+                    // if wake up on ww, send event
+                    if (config.screenOnWakeWord) {
+                        config.eventBroadcaster.notifyEvent(Event("screenWake", "", ""))
+                    }
 
                     if (config.wakeWordSound != "none") {
                         WakeWordSoundPlayer(

@@ -13,6 +13,7 @@ class ScreenUtils(val context: Context) : ContextWrapper(context) {
     var log = Logger()
     var config = APPConfig.getInstance(context)
     private var wakeLock: PowerManager.WakeLock? = null
+    private var screenTimeout: Int = 30000
 
     fun setScreenBrightness(
         screenBrightnessValue: Int
@@ -98,4 +99,13 @@ class ScreenUtils(val context: Context) : ContextWrapper(context) {
         val pm = getSystemService(POWER_SERVICE) as PowerManager
         return pm.isInteractive
     }
+
+    fun getScreenTimeout(): Int {
+        return Settings.System.getString(contentResolver, Settings.System.SCREEN_OFF_TIMEOUT).toInt()
+    }
+
+    fun setScreenTimeout(timeout: Int) {
+        Settings.System.putInt(contentResolver, Settings.System.SCREEN_OFF_TIMEOUT, timeout)
+    }
+
 }

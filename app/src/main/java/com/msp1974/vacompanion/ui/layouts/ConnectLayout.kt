@@ -2,6 +2,7 @@ package com.msp1974.vacompanion.ui.layouts
 
 import android.content.res.Configuration
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -59,6 +60,7 @@ fun ConnectionScreen(vaViewModel: VAViewModel = viewModel()) {
                     .statusBarsPadding()
                     .verticalScroll(rememberScrollState())
                     .safeDrawingPadding()
+                    .background(MaterialTheme.colorScheme.background)
                     .fillMaxSize(),
             ) {
                 Column(
@@ -105,7 +107,9 @@ fun ConnectionScreen(vaViewModel: VAViewModel = viewModel()) {
             }
         }
         Configuration.ORIENTATION_LANDSCAPE -> {
-            Column() {
+            Column(
+                modifier = Modifier.background(MaterialTheme.colorScheme.background)
+            ) {
                 Row() {
                     Column(
                         modifier = Modifier

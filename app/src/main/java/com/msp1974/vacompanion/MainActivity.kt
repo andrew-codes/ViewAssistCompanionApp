@@ -14,12 +14,16 @@ import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.media.AudioManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.Environment
 import android.os.Handler
 import android.os.Looper
 import android.os.StrictMode
+import android.provider.DocumentsContract
 import android.provider.Settings
+import android.view.Display
 import android.view.ViewGroup
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
@@ -28,12 +32,14 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.annotation.RequiresApi
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.core.net.toUri
@@ -50,6 +56,7 @@ import com.msp1974.vacompanion.service.VABackgroundService
 import com.msp1974.vacompanion.settings.APPConfig
 import com.msp1974.vacompanion.ui.VADialog
 import com.msp1974.vacompanion.ui.components.VADialog
+import com.msp1974.vacompanion.ui.layouts.BlackScreen
 import com.msp1974.vacompanion.ui.layouts.ConnectionScreen
 import com.msp1974.vacompanion.ui.layouts.WebViewScreen
 import com.msp1974.vacompanion.ui.theme.AppTheme
@@ -66,8 +73,6 @@ import com.msp1974.vacompanion.utils.ScreenUtils
 import com.msp1974.vacompanion.utils.Updater
 import kotlin.concurrent.thread
 import kotlin.getValue
-import kotlin.math.max
-import kotlin.math.min
 
 
 class MainActivity : ComponentActivity(), EventListener, ComponentCallbacks2 {
@@ -85,6 +90,8 @@ class MainActivity : ComponentActivity(), EventListener, ComponentCallbacks2 {
     private var screenOrientation: Int = 0
     private var updateProcessComplete: Boolean = true
     private var firstLoad: Boolean = true
+    private var screenTimeout: Int = 30000
+    private var tempScreenTimeout: Int = 0
 
     @SuppressLint("HardwareIds", "SetTextI18n")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -102,6 +109,14 @@ class MainActivity : ComponentActivity(), EventListener, ComponentCallbacks2 {
         config = APPConfig.getInstance(this)
         screen = ScreenUtils(this)
         updater = Updater(this)
+
+        // If we get in a mess with short screen timeout to turn off
+        // screen, set a decent timeout here.
+        screenTimeout = screen.getScreenTimeout()
+        if (screenTimeout < 15000) {
+            screenTimeout = 15000
+            screen.setScreenTimeout(screenTimeout)
+        }
 
         webView = CustomWebView.getView(this)
         webViewClient = CustomWebViewClient(viewModel)
@@ -128,6 +143,11 @@ class MainActivity : ComponentActivity(), EventListener, ComponentCallbacks2 {
         // Init webview setup
         initWebView()
 
+        // Hide system bars
+        val windowInsetsController = WindowCompat.getInsetsController(window, window.decorView)
+        windowInsetsController.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        windowInsetsController.hide(WindowInsetsCompat.Type.systemBars())
+
         setContent {
             AppTheme(darkMode = false, dynamicColor = false) {
                 val vaUiState by viewModel.vacaState.collectAsState()
@@ -135,11 +155,15 @@ class MainActivity : ComponentActivity(), EventListener, ComponentCallbacks2 {
                 Surface(
                     modifier = Modifier
                         .fillMaxSize(),
-                    color = MaterialTheme.colorScheme.background
+                    color = Color.Black
                 ) {
                     if (vaUiState.satelliteRunning) {
-                        firstLoad = false
-                        WebViewScreen(webView)
+                        if (!vaUiState.screenOn) {
+                            BlackScreen()
+                        } else {
+                            firstLoad = false
+                            WebViewScreen(webView)
+                        }
                     } else {
                         ConnectionScreen()
                     }
@@ -212,27 +236,7 @@ class MainActivity : ComponentActivity(), EventListener, ComponentCallbacks2 {
         // Make volume keys adjust music stream
         volumeControlStream = AudioManager.STREAM_MUSIC
 
-        // Initiate wake word broadcast receiver
-        val satelliteBroadcastReceiver: BroadcastReceiver = object : BroadcastReceiver() {
-            override fun onReceive(context: Context, intent: Intent) {
-                when (intent.action) {
-                    BroadcastSender.SATELLITE_STARTED -> {
-                        viewModel.setSatelliteRunning(true)
-                        setZoomLevel(config.zoomLevel)
-                        val url = AuthUtils.getURL(webViewClient.getHAUrl())
-                        log.d("Loading URL: $url")
-                        webView.loadUrl(url)
-                    }
-                    BroadcastSender.SATELLITE_STOPPED -> {
-                        viewModel.setSatelliteRunning(false)
-                    }
-                    BroadcastSender.VERSION_MISMATCH -> {
-                        runUpdateRoutine()
-                    }
-                }
-
-            }
-        }
+        // Add broadcast receiver
         val filter = IntentFilter().apply {
             addAction(BroadcastSender.SATELLITE_STARTED)
             addAction(BroadcastSender.SATELLITE_STOPPED)
@@ -247,6 +251,28 @@ class MainActivity : ComponentActivity(), EventListener, ComponentCallbacks2 {
 
         // Start background tasks
         runBackgroundTasks()
+    }
+
+    // Initiate wake word broadcast receiver
+    val satelliteBroadcastReceiver: BroadcastReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            when (intent.action) {
+                BroadcastSender.SATELLITE_STARTED -> {
+                    viewModel.setSatelliteRunning(true)
+                    setZoomLevel(config.zoomLevel)
+                    val url = AuthUtils.getURL(webViewClient.getHAUrl())
+                    log.d("Loading URL: $url")
+                    webView.loadUrl(url)
+                }
+                BroadcastSender.SATELLITE_STOPPED -> {
+                    viewModel.setSatelliteRunning(false)
+                }
+                BroadcastSender.VERSION_MISMATCH -> {
+                    runUpdateRoutine()
+                }
+            }
+
+        }
     }
 
     fun setStatus(status: String) {
@@ -278,14 +304,13 @@ class MainActivity : ComponentActivity(), EventListener, ComponentCallbacks2 {
         log.d("Main Activity resumed")
 
         setScreenAlwaysOn(config.screenAlwaysOn)
-
-        val windowInsetsController = WindowCompat.getInsetsController(window, window.decorView)
-        windowInsetsController.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-        windowInsetsController.hide(WindowInsetsCompat.Type.systemBars())
     }
 
     override fun onDestroy() {
         log.d("Main Activity destroyed")
+        screen.setScreenTimeout(screenTimeout)
+        config.eventBroadcaster.removeListener(this)
+        LocalBroadcastManager.getInstance(this).unregisterReceiver(satelliteBroadcastReceiver)
         super.onDestroy()
     }
 
@@ -293,6 +318,15 @@ class MainActivity : ComponentActivity(), EventListener, ComponentCallbacks2 {
         if ( config.backgroundTaskRunning ) {
             log.w("Background task already running.  Not starting from MainActivity")
             firebase.logEvent(FirebaseManager.MAIN_ACTIVITY_BACKGROUND_TASK_ALREADY_RUNNING, mapOf())
+            if (config.isRunning) {
+                viewModel.setSatelliteRunning(true)
+                setZoomLevel(config.zoomLevel)
+                val url = AuthUtils.getURL(webViewClient.getHAUrl())
+                log.d("Loading URL: $url")
+                webView.loadUrl(url)
+            } else {
+                setStatus(getString(R.string.status_waiting_for_connection))
+            }
             return
         }
         if (!updateProcessComplete) {
@@ -303,12 +337,16 @@ class MainActivity : ComponentActivity(), EventListener, ComponentCallbacks2 {
         }
         log.d("Starting background tasks")
         setStatus(getString(R.string.status_waiting_for_connection))
-        val serviceIntent = Intent(this.applicationContext, VABackgroundService::class.java)
-        startService(serviceIntent)
+        Intent(this.applicationContext, VABackgroundService::class.java).also {
+            it.action = VABackgroundService.Actions.START.toString()
+            startService(it)
+        }
+
     }
 
     override fun onEventTriggered(event: Event) {
         var consumed = true
+
         when (event.eventName) {
             "refresh" -> runOnUiThread { webView.reload() }
             "zoomLevel" -> runOnUiThread { setZoomLevel(event.newValue as Int) }
@@ -316,10 +354,61 @@ class MainActivity : ComponentActivity(), EventListener, ComponentCallbacks2 {
             "screenAlwaysOn" -> runOnUiThread { setScreenAlwaysOn(event.newValue as Boolean, true) }
             "screenAutoBrightness" -> runOnUiThread { setScreenAutoBrightness(event.newValue as Boolean) }
             "screenBrightness" -> runOnUiThread { setScreenBrightness(event.newValue as Float) }
+            "screenWake" -> runOnUiThread { screenWake() }
+            "screenSleep" -> runOnUiThread { screenSleep() }
             else -> consumed = false
         }
         if (consumed) {
             log.d("MainActivity - Event: ${event.eventName} - ${event.newValue}")
+        }
+    }
+
+    fun screenWake() {
+        viewModel.setScreenOn(true)
+        screen.setScreenTimeout(screenTimeout)
+        setScreenAlwaysOn(config.screenAlwaysOn, true)
+        setScreenAutoBrightness(config.screenAutoBrightness)
+        setScreenBrightness(config.screenBrightness)
+        screen.wakeScreen()
+    }
+
+    fun screenSleep() {
+        viewModel.setScreenOn(false)
+        if (tempScreenTimeout == 0) {
+            screenTimeout = screen.getScreenTimeout()
+            tempScreenTimeout = 1000
+        }
+        screen.setScreenTimeout(tempScreenTimeout)
+        setScreenAlwaysOn(false)
+        setScreenAutoBrightness(false)
+        setScreenBrightness(0.01f)
+        Handler(Looper.getMainLooper()).postDelayed({
+            resetScreenParams()
+        }, 1000)
+    }
+
+    private fun resetScreenParams() {
+        var isScreenOff = false
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            isScreenOff = display.state == Display.STATE_OFF
+        } else {
+            isScreenOff = windowManager.defaultDisplay.state == Display.STATE_OFF
+        }
+
+        if (isScreenOff) {
+            log.d("Screen off")
+            viewModel.setScreenOn(true)
+            screen.setScreenTimeout(screenTimeout)
+            setScreenAutoBrightness(config.screenAutoBrightness)
+            setScreenBrightness(config.screenBrightness)
+            tempScreenTimeout = 0
+        } else {
+            if (!viewModel.vacaState.value.screenOn) {
+                log.d("Waiting for screen off")
+                Handler(Looper.getMainLooper()).postDelayed({
+                    resetScreenParams()
+                }, 1000)
+            }
         }
     }
 

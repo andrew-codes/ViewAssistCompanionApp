@@ -71,7 +71,7 @@ class ClientHandler(private val context: Context, private val server: WyomingTCP
                         volumeDucking("all", true)
                         sendWakeWordDetection()
                         sendStartPipeline()
-                    }
+                    }    
                 }).start()
             }
         }
@@ -418,7 +418,11 @@ class ClientHandler(private val context: Context, private val server: WyomingTCP
             }
 
             "screen-wake" -> {
-                ScreenUtils(context).wakeScreen()
+                config.eventBroadcaster.notifyEvent(Event("screenWake", "", ""))
+            }
+
+            "screen-sleep" -> {
+                config.eventBroadcaster.notifyEvent(Event("screenSleep", "", ""))
             }
 
             "wake" -> {
@@ -426,6 +430,13 @@ class ClientHandler(private val context: Context, private val server: WyomingTCP
                     volumeDucking("all", true)
                     sendWakeWordDetection()
                     sendStartPipeline()
+                    // if screen is off, wake up
+                    if (config.screenOnWakeWord) {
+                        val screen = ScreenUtils(context)
+                        if (!screen.isScreenOn()) {
+                            config.eventBroadcaster.notifyEvent(Event("screenWake", "", ""))
+                        }
+                    }
                 }
             }
             "alarm" -> {

@@ -27,6 +27,7 @@ data class State(
     var satelliteRunning: Boolean = false,
     var swipeRefreshEnabled: Boolean = false,
     var isDND: Boolean = false,
+    var screenOn: Boolean = true,
 
     var appInfo: Map<String, String> = mapOf(),
     var diagnosticInfo: DiagnosticInfo = DiagnosticInfo(),
@@ -179,6 +180,14 @@ class VAViewModel: ViewModel(), EventListener {
         _vacaState.update { currentState ->
             currentState.copy(
                 statusMessage = statusMessage
+            )
+        }
+    }
+
+    fun setScreenOn(screenOn: Boolean) {
+        _vacaState.update { currentState ->
+            currentState.copy(
+                screenOn = screenOn
             )
         }
     }

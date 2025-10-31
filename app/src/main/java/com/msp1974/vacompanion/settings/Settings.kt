@@ -134,9 +134,18 @@ class APPConfig(val context: Context) {
         onValueChangedListener(property, oldValue, newValue)
     }
 
-    var zoomLevel: Int by Delegates.observable(100) { property, oldValue, newValue ->
+    var zoomLevel: Int by Delegates.observable(0) { property, oldValue, newValue ->
         onValueChangedListener(property, oldValue, newValue)
     }
+
+    var screenOnWakeWord: Boolean by Delegates.observable(false) { property, oldValue, newValue ->
+        onValueChangedListener(property, oldValue, newValue)
+    }
+
+    var screenOn: Boolean by Delegates.observable(false) { property, oldValue, newValue ->
+        onValueChangedListener(property, oldValue, newValue)
+    }
+
 
 
     // SharedPreferences
@@ -240,6 +249,12 @@ class APPConfig(val context: Context) {
         }
         if (settings.has("zoom_level")) {
             zoomLevel = settings.getInt("zoom_level")
+        }
+        if (settings.has("screen_on_wake_word")) {
+            screenOnWakeWord = settings.getBoolean("screen_on_wake_word")
+        }
+        if (settings.has("screen_on")) {
+            screenOn = settings.getBoolean("screen_on")
         }
         Firebase.crashlytics.log("Settings update")
     }
