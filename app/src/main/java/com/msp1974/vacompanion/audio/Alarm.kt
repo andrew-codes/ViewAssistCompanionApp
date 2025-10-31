@@ -18,9 +18,15 @@ class Alarm(val context: Context) {
     var isSounding: Boolean = false
     var mediaPlayer: MediaPlayer? = null
 
-    fun startAlarm() {
+    fun startAlarm(url: String? = null) {
         if (mediaPlayer == null) {
-            mediaPlayer = MediaPlayer.create(context, R.raw.alarm_sound)
+            if (url != null) {
+                mediaPlayer = MediaPlayer()
+                mediaPlayer?.setDataSource(url)
+                mediaPlayer?.prepare()
+            } else {
+                mediaPlayer = MediaPlayer.create(context, R.raw.alarm_sound)
+            }
             mediaPlayer?.isLooping = true
             mediaPlayer?.start()
             isSounding = true

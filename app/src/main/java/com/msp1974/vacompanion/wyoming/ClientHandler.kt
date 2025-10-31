@@ -68,10 +68,23 @@ class ClientHandler(private val context: Context, private val server: WyomingTCP
             if (satelliteStatus == SatelliteState.RUNNING) {
                 Thread(object : Runnable {
                     override fun run() {
-                        volumeDucking("all", true)
-                        sendWakeWordDetection()
-                        sendStartPipeline()
-                    }    
+                        when {
+                            pcmMediaPlayer.isPlaying -> {
+                                sendAudioStop()
+                                pcmMediaPlayer.stop()
+                                volumeDucking("music", false)
+                            }
+                            alarmPlayer.isSounding -> {
+                                alarmPlayer.stopAlarm()
+                                volumeDucking("music", false)
+                            }
+                            else -> {
+                                volumeDucking("all", true)
+                                sendWakeWordDetection()
+                                sendStartPipeline()
+                            }
+                        }
+                    }
                 }).start()
             }
         }
@@ -294,7 +307,9 @@ class ClientHandler(private val context: Context, private val server: WyomingTCP
 
                 "audio-chunk" -> {
                     // Audio chunk
-                    pcmMediaPlayer.writeAudio(event.payload)
+                    if (pcmMediaPlayer.isPlaying) {
+                        pcmMediaPlayer.writeAudio(event.payload)
+                    }
                 }
 
                 "audio-stop" -> {
@@ -447,9 +462,14 @@ class ClientHandler(private val context: Context, private val server: WyomingTCP
                     } catch (ex: JSONException) {
                         false
                     }
+                    val url = try {
+                        values.getString("url")
+                    } catch (ex: JSONException) {
+                        null
+                    }
                     if (active) {
                         volumeDucking("music", true)
-                        alarmPlayer.startAlarm()
+                        alarmPlayer.startAlarm(url)
                     } else {
                         alarmPlayer.stopAlarm()
                         volumeDucking("music", false)

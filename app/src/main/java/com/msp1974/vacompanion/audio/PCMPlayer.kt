@@ -66,10 +66,14 @@ class PCMMediaPlayer(context: Context) {
         this.audioTrack?.write(buffer, 0, buffer.size)
     }
 
-    fun stop() {
+    fun stop(force: Boolean = false) {
         isPlaying = false
+        if (force) {
+            audioTrack?.pause()
+        } else {
+            audioTrack?.stop()
+        }
         audioTrack?.apply {
-            stop()
             flush()
             release()
         }
