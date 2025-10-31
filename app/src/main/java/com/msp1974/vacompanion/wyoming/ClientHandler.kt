@@ -159,6 +159,9 @@ class ClientHandler(private val context: Context, private val server: WyomingTCP
                 server.pipelineClient = this
                 satelliteStatus = SatelliteState.RUNNING
             } else {
+                // Ensure alarm is inactive
+                actionAlarm(false)
+
                 // Start satellite functions
                 server.pipelineClient = this
                 satelliteStatus = SatelliteState.RUNNING
@@ -182,7 +185,7 @@ class ClientHandler(private val context: Context, private val server: WyomingTCP
             }
 
             // Stop media players
-            alarmPlayer.stopAlarm()
+            actionAlarm(false)
             musicPlayer.stop()
 
             pipelineStatus = PipelineStatus.INACTIVE
@@ -660,7 +663,10 @@ class ClientHandler(private val context: Context, private val server: WyomingTCP
     }
 
     fun sendSettingChange(name: String, value: String) {
-        sendStatus(buildJsonObject {
+        sendCustomEvent(
+            "settings",
+            buildJsonObject {
+            put("timestamp", Date().toString())
             putJsonObject("settings") {
                 put(name, value)
             }
@@ -668,19 +674,25 @@ class ClientHandler(private val context: Context, private val server: WyomingTCP
     }
 
     fun sendSettingChange(name: String, value: Boolean) {
-        sendStatus(buildJsonObject {
-            putJsonObject("settings") {
-                put(name, value)
-            }
-        })
+        sendCustomEvent(
+            "settings",
+            buildJsonObject {
+                put("timestamp", Date().toString())
+                putJsonObject("settings") {
+                    put(name, value)
+                }
+            })
     }
 
     fun sendSettingChange(name: String, value: Int) {
-        sendStatus(buildJsonObject {
-            putJsonObject("settings") {
-                put(name, value)
-            }
-        })
+        sendCustomEvent(
+            "settings",
+            buildJsonObject {
+                put("timestamp", Date().toString())
+                putJsonObject("settings") {
+                    put(name, value)
+                }
+            })
     }
 
 
