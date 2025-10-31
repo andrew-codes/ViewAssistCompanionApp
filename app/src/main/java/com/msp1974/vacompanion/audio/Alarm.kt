@@ -18,9 +18,9 @@ class Alarm(val context: Context) {
     var isSounding: Boolean = false
     var mediaPlayer: MediaPlayer? = null
 
-    fun startAlarm(url: String? = null) {
+    fun startAlarm(url: String = "") {
         if (mediaPlayer == null) {
-            if (url != null) {
+            if (url != "") {
                 mediaPlayer = MediaPlayer()
                 mediaPlayer?.setDataSource(url)
                 mediaPlayer?.prepare()

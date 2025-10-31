@@ -75,8 +75,7 @@ class ClientHandler(private val context: Context, private val server: WyomingTCP
                                 volumeDucking("music", false)
                             }
                             alarmPlayer.isSounding -> {
-                                alarmPlayer.stopAlarm()
-                                volumeDucking("music", false)
+                                actionAlarm(false)
                             }
                             else -> {
                                 volumeDucking("all", true)
@@ -465,14 +464,12 @@ class ClientHandler(private val context: Context, private val server: WyomingTCP
                     val url = try {
                         values.getString("url")
                     } catch (ex: JSONException) {
-                        null
+                        ""
                     }
                     if (active) {
-                        volumeDucking("music", true)
-                        alarmPlayer.startAlarm(url)
+                        actionAlarm(true, url)
                     } else {
-                        alarmPlayer.stopAlarm()
-                        volumeDucking("music", false)
+                        actionAlarm(false)
                     }
                 }
             }
@@ -502,6 +499,17 @@ class ClientHandler(private val context: Context, private val server: WyomingTCP
             }
 
         }
+    }
+
+    private fun actionAlarm(enable: Boolean, url: String = "") {
+        if (enable) {
+            volumeDucking("music", true)
+            alarmPlayer.startAlarm(url)
+        } else {
+            alarmPlayer.stopAlarm()
+            volumeDucking("music", false)
+        }
+        sendSettingChange("alarm", enable)
     }
 
     private fun startIntervalPing() {
@@ -650,6 +658,31 @@ class ClientHandler(private val context: Context, private val server: WyomingTCP
             log.e("Error sending audio event: $ex")
         }
     }
+
+    fun sendSettingChange(name: String, value: String) {
+        sendStatus(buildJsonObject {
+            putJsonObject("settings") {
+                put(name, value)
+            }
+        })
+    }
+
+    fun sendSettingChange(name: String, value: Boolean) {
+        sendStatus(buildJsonObject {
+            putJsonObject("settings") {
+                put(name, value)
+            }
+        })
+    }
+
+    fun sendSettingChange(name: String, value: Int) {
+        sendStatus(buildJsonObject {
+            putJsonObject("settings") {
+                put(name, value)
+            }
+        })
+    }
+
 
     fun sendStatus(data: JsonObject) {
         sendCustomEvent(
