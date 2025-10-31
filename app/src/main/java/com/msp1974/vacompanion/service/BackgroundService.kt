@@ -2,15 +2,13 @@ package com.msp1974.vacompanion.service
 
 import android.Manifest
 import android.app.KeyguardManager
-import android.app.Notification
-import android.app.NotificationChannel
-import android.app.NotificationManager
+import android.app.PendingIntent
 import android.app.Service
-import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
 import android.net.wifi.WifiManager
+import android.os.Build
 import android.os.IBinder
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
@@ -20,8 +18,11 @@ import com.google.firebase.Firebase
 import com.google.firebase.crashlytics.crashlytics
 import com.msp1974.vacompanion.MainActivity
 import com.msp1974.vacompanion.R
+import com.msp1974.vacompanion.VACAApplication
 import com.msp1974.vacompanion.settings.APPConfig
 import com.msp1974.vacompanion.utils.Logger
+import java.util.Timer
+import java.util.TimerTask
 
 
 class VABackgroundService : Service() {
@@ -29,8 +30,13 @@ class VABackgroundService : Service() {
     private lateinit var config: APPConfig
     private var wifiLock: WifiManager.WifiLock? = null
     private var keyguardLock: KeyguardManager.KeyguardLock? = null
+    private var watchdogTimer: Timer = Timer()
 
     private var backgroundTask:  BackgroundTaskController? = null
+
+    enum class Actions {
+        START, STOP
+    }
 
     override fun onBind(intent: Intent?): IBinder? {
         return null
@@ -54,71 +60,102 @@ class VABackgroundService : Service() {
         }
     }
 
-    private fun createNotification(): Notification {
-        val channelId = "va_service_channel"
-        val notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
-        val channel = NotificationChannel(channelId, "VA Service", NotificationManager.IMPORTANCE_LOW)
-        notificationManager.createNotificationChannel(channel)
-        return NotificationCompat.Builder(this, channelId)
-            .setContentTitle("VACA Background Service")
-            .setContentText("Running background tasks...")
-            .setSmallIcon(R.drawable.splash_image)
-            .build()
-    }
-
     /**
     * Main process for the service
     * */
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        Firebase.crashlytics.log("Background service starting")
-        if (!checkIfPermissionIsGranted()) return START_NOT_STICKY
+        when (intent?.action) {
+            Actions.START.toString() -> {
+                Firebase.crashlytics.log("Background service starting")
+                if (!checkIfPermissionIsGranted()) return START_NOT_STICKY
 
-        //need core 1.12 and higher and SDK 30 and higher
-        var requires: Int = 0
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
-            requires += ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
-        }
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
-            requires += ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
-        }
+                //need core 1.12 and higher and SDK 30 and higher
+                var requires: Int = 0
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    requires += ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
+                }
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                    requires += ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
+                }
 
-        val notification = createNotification()
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
-            log.d("Running in foreground ServiceCompat mode")
-            ServiceCompat.startForeground(
-                this@VABackgroundService, 1, notification,
-                requires
-            )
-        } else {
-            log.d("Running in foreground service")
-            startForeground(1, notification)
-        }
+                val notification =
+                    NotificationCompat.Builder(this, "VACAForegroundServiceChannelId")
+                        .setSmallIcon(R.mipmap.ic_launcher)
+                        .setContentTitle("View Assist Companion App")
+                        .setContentText("Service is running")
+                        //.addAction(
+                        //   R.drawable.outline_stop_circle_24, getString(R.string.stop_service),
+                        //    stopServiceIntent(Actions.STOP.toString())
+                        //)
+                        .build()
 
-        if (!wifiLock!!.isHeld) {
-            wifiLock!!.acquire()
-        }
-        try {
-            keyguardLock?.disableKeyguard()
-        } catch (ex: Exception) {
-            log.i("Disabling keyguard didn't work")
-            ex.printStackTrace()
-            Firebase.crashlytics.recordException(ex)
-        }
-        backgroundTask = BackgroundTaskController(this)
-        backgroundTask?.start()
-        log.i("Background Service Started")
-        config.backgroundTaskRunning = true
+                log.d("Running in foreground ServiceCompat mode")
+                ServiceCompat.startForeground(
+                    this@VABackgroundService,
+                    1,
+                    notification,
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                        requires
+                    } else {
+                        0
+                    },
+                )
 
-        // TEST Launch Activity
-        if (config.currentActivity == "") {
-            log.i("Launching MainActivity from foreground service")
-            Firebase.crashlytics.log("Launching MainActivity from foreground service")
-            val intent = Intent(this, MainActivity::class.java)
-            intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
-            startActivity(intent)
+                if (!wifiLock!!.isHeld) {
+                    wifiLock!!.acquire()
+                }
+                try {
+                    keyguardLock?.disableKeyguard()
+                } catch (ex: Exception) {
+                    log.i("Disabling keyguard didn't work")
+                    ex.printStackTrace()
+                    Firebase.crashlytics.recordException(ex)
+                }
+                backgroundTask = BackgroundTaskController(this)
+                backgroundTask?.start()
+                log.i("Background Service Started")
+                config.backgroundTaskRunning = true
+
+                // TEST Launch Activity
+                if (config.currentActivity == "") {
+                    log.i("Launching MainActivity from foreground service")
+                    Firebase.crashlytics.log("Launching MainActivity from foreground service")
+                    val intent = Intent(this, MainActivity::class.java)
+                    intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                    startActivity(intent)
+                }
+
+                //Run activity restart watchdog
+                restartActivityWatchdog()
+            }
+            Actions.STOP.toString() -> {
+                Firebase.crashlytics.log("Background service stopping")
+                onDestroy()
+            }
         }
 
         return START_STICKY
+    }
+
+    private fun restartActivityWatchdog() {
+        watchdogTimer.schedule(object: TimerTask() {
+            override fun run() {
+                if (VACAApplication.activityManager.activity == null) {
+                    log.d("Watchdog detected activity not running.  Restarting...")
+                    Intent(this@VABackgroundService, MainActivity::class.java).also {
+                        it.flags = Intent.FLAG_ACTIVITY_CLEAR_TOP
+                        startActivity(it)
+                    }
+                }
+            }
+        },0,5000)
+    }
+
+    private fun stopServiceIntent(name: String): PendingIntent {
+        val intent = Intent(this, VABackgroundService::class.java)
+        intent.setAction(name)
+        val pendingIntent = PendingIntent.getService(this, 0, intent, PendingIntent.FLAG_IMMUTABLE)
+        return pendingIntent
     }
 
     private fun checkIfPermissionIsGranted() = ActivityCompat.checkSelfPermission(
@@ -128,7 +165,9 @@ class VABackgroundService : Service() {
 
     override fun onDestroy() {
         log.i("Stopping Background Service")
+        watchdogTimer.cancel()
         backgroundTask?.shutdown()
+        config.backgroundTaskRunning = false
 
         // Release any lock from this app
         if (wifiLock != null && wifiLock!!.isHeld) {

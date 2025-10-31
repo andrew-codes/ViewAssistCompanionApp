@@ -36,6 +36,7 @@
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <application
+        android:name=".VACAApplication"
         android:usesCleartextTraffic="true"
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
@@ -66,7 +67,6 @@
             android:name=".service.VABackgroundService"
             android:enabled="true"
             android:exported="false"
-            android:stopWithTask="true"
             android:foregroundServiceType="microphone|mediaPlayback" />
 
         <!--Broadcast Receiver (Optional)-->
