@@ -19,10 +19,12 @@ import com.google.firebase.crashlytics.crashlytics
 import com.msp1974.vacompanion.MainActivity
 import com.msp1974.vacompanion.R
 import com.msp1974.vacompanion.VACAApplication
+import com.msp1974.vacompanion.broadcasts.BroadcastSender
 import com.msp1974.vacompanion.settings.APPConfig
 import com.msp1974.vacompanion.utils.Logger
 import java.util.Timer
 import java.util.TimerTask
+import kotlin.system.exitProcess
 
 
 class VABackgroundService : Service() {
@@ -83,10 +85,10 @@ class VABackgroundService : Service() {
                         .setSmallIcon(R.mipmap.ic_launcher)
                         .setContentTitle("View Assist Companion App")
                         .setContentText("Service is running")
-                        //.addAction(
-                        //   R.drawable.outline_stop_circle_24, getString(R.string.stop_service),
-                        //    stopServiceIntent(Actions.STOP.toString())
-                        //)
+                        .addAction(
+                           R.drawable.outline_stop_circle_24, getString(R.string.stop_service),
+                            stopServiceIntent(Actions.STOP.toString())
+                        )
                         .build()
 
                 log.d("Running in foreground ServiceCompat mode")
@@ -130,7 +132,9 @@ class VABackgroundService : Service() {
             }
             Actions.STOP.toString() -> {
                 Firebase.crashlytics.log("Background service stopping")
-                onDestroy()
+                stopForeground(STOP_FOREGROUND_REMOVE)
+                stopSelf()
+                //onDestroy()
             }
         }
 
@@ -180,6 +184,10 @@ class VABackgroundService : Service() {
             ex.printStackTrace()
             Firebase.crashlytics.recordException(ex)
         }
+
+        // Close mainActivity
+        BroadcastSender.sendBroadcast(applicationContext, BroadcastSender.TERMINATE)
+        exitProcess(0)
     }
 
 }

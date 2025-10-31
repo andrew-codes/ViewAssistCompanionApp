@@ -52,6 +52,7 @@
         tools:targetApi="32">
         <activity
             android:name=".MainActivity"
+            android:launchMode="singleTask"
             android:configChanges="orientation|screenSize|keyboardHidden|uiMode"
             android:enabled="true"
             android:exported="true">

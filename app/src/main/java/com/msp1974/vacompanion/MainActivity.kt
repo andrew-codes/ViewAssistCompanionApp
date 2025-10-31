@@ -73,6 +73,7 @@ import com.msp1974.vacompanion.utils.ScreenUtils
 import com.msp1974.vacompanion.utils.Updater
 import kotlin.concurrent.thread
 import kotlin.getValue
+import kotlin.system.exitProcess
 
 
 class MainActivity : ComponentActivity(), EventListener, ComponentCallbacks2 {
@@ -241,6 +242,7 @@ class MainActivity : ComponentActivity(), EventListener, ComponentCallbacks2 {
             addAction(BroadcastSender.SATELLITE_STARTED)
             addAction(BroadcastSender.SATELLITE_STOPPED)
             addAction(BroadcastSender.VERSION_MISMATCH)
+            addAction(BroadcastSender.TERMINATE)
         }
         LocalBroadcastManager.getInstance(this)
             .registerReceiver(satelliteBroadcastReceiver, filter)
@@ -269,6 +271,10 @@ class MainActivity : ComponentActivity(), EventListener, ComponentCallbacks2 {
                 }
                 BroadcastSender.VERSION_MISMATCH -> {
                     runUpdateRoutine()
+                }
+                BroadcastSender.TERMINATE -> {
+                    finishAndRemoveTask()
+                    exitProcess(0)
                 }
             }
 
