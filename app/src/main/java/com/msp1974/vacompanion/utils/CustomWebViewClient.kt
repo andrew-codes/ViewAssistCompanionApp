@@ -76,9 +76,9 @@ class CustomWebViewClient(viewModel: VAViewModel): WebViewClientCompat()  {
         if (config.homeAssistantURL == "") {
             return "http://${config.homeAssistantConnectedIP}:${config.homeAssistantHTTPPort}"
         }
-        val url = config.homeAssistantURL
+        val url = config.homeAssistantURL.removeSuffix("/")
         if (config.homeAssistantDashboard != "") {
-            return url + "/" + config.homeAssistantDashboard
+            return url + "/" + config.homeAssistantDashboard.removePrefix("/")
         }
         return config.homeAssistantURL
     }
