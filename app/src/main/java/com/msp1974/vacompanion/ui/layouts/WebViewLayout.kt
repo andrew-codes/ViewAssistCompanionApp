@@ -3,7 +3,6 @@ package com.msp1974.vacompanion.ui.layouts
 import android.view.ViewGroup
 import android.webkit.WebView
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
@@ -16,13 +15,12 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import com.msp1974.vacompanion.ui.VAViewModel
 import com.msp1974.vacompanion.ui.components.DiagnosticBar
-import com.msp1974.vacompanion.ui.theme.CustomColours
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -33,7 +31,7 @@ fun WebViewScreen (webView: WebView, vaViewModel: VAViewModel = viewModel()) {
     Box(modifier = Modifier.fillMaxSize()) {
         val modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
+            .background(if(vaUiState.satelliteRunning) Color.Black else MaterialTheme.colorScheme.background)
 
         Box(modifier = modifier) {
             WebView(webView, swipeRefreshEnabled = vaViewModel.config!!.swipeRefresh)
