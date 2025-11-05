@@ -146,9 +146,13 @@ class VABackgroundService : Service() {
             override fun run() {
                 if (VACAApplication.activityManager.activity == null) {
                     log.d("Watchdog detected activity not running.  Restarting...")
-                    Intent(this@VABackgroundService, MainActivity::class.java).also {
-                        it.flags = Intent.FLAG_ACTIVITY_CLEAR_TOP
-                        startActivity(it)
+                    try {
+                        Intent(this@VABackgroundService, MainActivity::class.java).also {
+                            it.flags = Intent.FLAG_ACTIVITY_CLEAR_TOP
+                            startActivity(it)
+                        }
+                    } catch (ex: Exception) {
+                        log.e("Watchdog failed to restart activity")
                     }
                 }
             }

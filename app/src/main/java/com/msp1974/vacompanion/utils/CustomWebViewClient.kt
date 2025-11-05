@@ -17,6 +17,7 @@ import androidx.appcompat.app.AlertDialog
 import androidx.webkit.WebSettingsCompat.DARK_STRATEGY_PREFER_WEB_THEME_OVER_USER_AGENT_DARKENING
 import androidx.webkit.WebViewClientCompat
 import com.msp1974.vacompanion.R
+import com.msp1974.vacompanion.broadcasts.BroadcastSender
 import com.msp1974.vacompanion.jsinterface.ExternalAuthCallback
 import com.msp1974.vacompanion.jsinterface.WebAppInterface
 import com.msp1974.vacompanion.jsinterface.WebViewJavascriptInterface
@@ -68,7 +69,13 @@ class CustomWebViewClient(viewModel: VAViewModel): WebViewClientCompat()  {
             reason = FirebaseManager.RENDER_PROCESS_KILLED
         }
         firebase.logEvent (reason, mapOf("detail" to detail.toString()))
-        view.reload()
+        try {
+            view.reload()
+        } catch (e: Exception) {
+            log.e("Failed to reload webview: $e")
+            // Close activity and let service restart it
+            BroadcastSender.sendBroadcast(config.context, BroadcastSender.END_ACTIVITY)
+        }
         return true
     }
 

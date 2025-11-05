@@ -145,9 +145,8 @@ class MainActivity : ComponentActivity(), EventListener, ComponentCallbacks2 {
         initWebView()
 
         // Hide system bars
-        val windowInsetsController = WindowCompat.getInsetsController(window, window.decorView)
-        windowInsetsController.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-        windowInsetsController.hide(WindowInsetsCompat.Type.systemBars())
+        screen.hideSystemUI(window)
+
 
         setContent {
             AppTheme(darkMode = false, dynamicColor = false) {
@@ -216,7 +215,8 @@ class MainActivity : ComponentActivity(), EventListener, ComponentCallbacks2 {
 
         firebase.setCustomKeys(mapOf(
             "Webview" to webViewVersion,
-            "Device" to Helpers.getDeviceName().toString()
+            "Device" to Helpers.getDeviceName().toString(),
+            "UUID" to config.uuid
         ))
     }
 
@@ -242,6 +242,7 @@ class MainActivity : ComponentActivity(), EventListener, ComponentCallbacks2 {
             addAction(BroadcastSender.SATELLITE_STARTED)
             addAction(BroadcastSender.SATELLITE_STOPPED)
             addAction(BroadcastSender.VERSION_MISMATCH)
+            addAction(BroadcastSender.END_ACTIVITY)
             addAction(BroadcastSender.TERMINATE)
         }
         LocalBroadcastManager.getInstance(this)
@@ -272,12 +273,11 @@ class MainActivity : ComponentActivity(), EventListener, ComponentCallbacks2 {
                 BroadcastSender.VERSION_MISMATCH -> {
                     runUpdateRoutine()
                 }
-                BroadcastSender.TERMINATE -> {
+                BroadcastSender.TERMINATE, BroadcastSender.END_ACTIVITY -> {
                     finishAndRemoveTask()
                     exitProcess(0)
                 }
             }
-
         }
     }
 
@@ -308,7 +308,7 @@ class MainActivity : ComponentActivity(), EventListener, ComponentCallbacks2 {
     override fun onResume() {
         super.onResume()
         log.d("Main Activity resumed")
-
+        screen.hideSystemUI(window)
         setScreenAlwaysOn(config.screenAlwaysOn)
     }
 
@@ -372,7 +372,7 @@ class MainActivity : ComponentActivity(), EventListener, ComponentCallbacks2 {
     fun screenWake() {
         viewModel.setScreenOn(true)
         screen.setScreenTimeout(screenTimeout)
-        setScreenAlwaysOn(config.screenAlwaysOn, true)
+        setScreenAlwaysOn(config.screenAlwaysOn, false)
         setScreenAutoBrightness(config.screenAutoBrightness)
         setScreenBrightness(config.screenBrightness)
         screen.wakeScreen()

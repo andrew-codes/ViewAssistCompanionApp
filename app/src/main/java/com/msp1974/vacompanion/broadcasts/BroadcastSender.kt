@@ -15,6 +15,7 @@ class BroadcastSender {
         internal const val TOAST_MESSAGE = "TOAST_MESSAGE"
         internal const val REFRESH = "REFRESH"
         internal const val VERSION_MISMATCH = "VERSION_MISMATCH"
+        internal const val END_ACTIVITY = "END_ACTIVITY"
         internal const val TERMINATE = "TERMINATE"
 
 
