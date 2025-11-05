@@ -26,6 +26,7 @@ data class State(
     var launchOnBoot: Boolean = true,
     var satelliteRunning: Boolean = false,
     var swipeRefreshEnabled: Boolean = false,
+    var darkMode: Boolean = false,
     var isDND: Boolean = false,
     var screenOn: Boolean = true,
 
@@ -84,6 +85,13 @@ class VAViewModel: ViewModel(), EventListener {
         var consumed = true
         when (event.eventName) {
             "pairedDeviceID" -> buildAppInfo()
+            "darkMode" -> {
+                _vacaState.update { currentState ->
+                    currentState.copy(
+                        darkMode = event.newValue as Boolean
+                    )
+                }
+            }
             "swipeRefresh" -> {
                 _vacaState.update { currentState ->
                     currentState.copy(
