@@ -22,18 +22,32 @@ class WyomingTCPServer (val context: Context, val port: Int, val cbCallback: Wyo
     var log = Logger()
     var runServer: Boolean = true
     var pipelineClient: ClientHandler? = null
+    lateinit var server: ServerSocket
 
     var deviceInfo: DeviceCapabilitiesData = DeviceCapabilitiesManager(context).getDeviceInfo()
 
     fun start() {
         try {
-            val server = ServerSocket(port)
+            server = ServerSocket(port)
             log.d("Wyoming server is running on port ${server.localPort}")
 
             while (runServer) {
                 val client = server.accept()
                 // Run client in it's own thread.
-                thread(name = "ClientHandler-${client.port}") { ClientHandler(context, this, client).run() }
+                if (runServer) {
+                    thread(name = "ClientHandler-${client.port}") {
+                        ClientHandler(
+                            context,
+                            this,
+                            client
+                        ).run()
+                    }
+                } else {
+                    client.close()
+                }
+            }
+            if (!server.isClosed) {
+                server.close()
             }
         } catch (e: Exception) {
             log.e("Server exception: $e")
@@ -42,7 +56,14 @@ class WyomingTCPServer (val context: Context, val port: Int, val cbCallback: Wyo
     }
 
     fun stop() {
+        log.d("Stopping server")
         runServer = false
+        if (pipelineClient != null) {
+            pipelineClient?.stop()
+        }
+        if (!server.isClosed) {
+            server.close()
+        }
     }
 
     fun sendAudio(audio: ByteArray) {

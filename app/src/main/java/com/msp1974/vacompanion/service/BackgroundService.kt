@@ -21,6 +21,7 @@ import com.msp1974.vacompanion.R
 import com.msp1974.vacompanion.VACAApplication
 import com.msp1974.vacompanion.broadcasts.BroadcastSender
 import com.msp1974.vacompanion.settings.APPConfig
+import com.msp1974.vacompanion.settings.BackgroundTaskStatus
 import com.msp1974.vacompanion.utils.Logger
 import java.util.Timer
 import java.util.TimerTask
@@ -117,24 +118,26 @@ class VABackgroundService : Service() {
                 backgroundTask?.start()
                 log.i("Background Service Started")
                 config.backgroundTaskRunning = true
+                config.backgroundTaskStatus = BackgroundTaskStatus.STARTED
 
-                // TEST Launch Activity
+                // Launch Activity if not running on service start
+                // Can be caused by crash and service restarted by OS
                 if (config.currentActivity == "") {
                     log.i("Launching MainActivity from foreground service")
                     Firebase.crashlytics.log("Launching MainActivity from foreground service")
                     val intent = Intent(this, MainActivity::class.java)
                     intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                    startActivity(intent)
+                    try {
+                        startActivity(intent)
+                    } catch (ex: Exception) {
+                        log.e("Foreground service failed to launch activity - ${ex.message}")
+                    }
                 }
-
-                //Run activity restart watchdog
-                restartActivityWatchdog()
             }
             Actions.STOP.toString() -> {
                 Firebase.crashlytics.log("Background service stopping")
                 stopForeground(STOP_FOREGROUND_REMOVE)
                 stopSelf()
-                //onDestroy()
             }
         }
 
@@ -148,11 +151,11 @@ class VABackgroundService : Service() {
                     log.d("Watchdog detected activity not running.  Restarting...")
                     try {
                         Intent(this@VABackgroundService, MainActivity::class.java).also {
-                            it.flags = Intent.FLAG_ACTIVITY_CLEAR_TOP
+                            it.flags = Intent.FLAG_ACTIVITY_NEW_TASK
                             startActivity(it)
                         }
                     } catch (ex: Exception) {
-                        log.e("Watchdog failed to restart activity")
+                        log.e("Watchdog failed to restart activity - ${ex.message}")
                     }
                 }
             }
@@ -176,6 +179,7 @@ class VABackgroundService : Service() {
         watchdogTimer.cancel()
         backgroundTask?.shutdown()
         config.backgroundTaskRunning = false
+        config.backgroundTaskStatus = BackgroundTaskStatus.NOT_STARTED
 
         // Release any lock from this app
         if (wifiLock != null && wifiLock!!.isHeld) {
@@ -188,10 +192,6 @@ class VABackgroundService : Service() {
             ex.printStackTrace()
             Firebase.crashlytics.recordException(ex)
         }
-
-        // Close mainActivity
-        BroadcastSender.sendBroadcast(applicationContext, BroadcastSender.TERMINATE)
-        exitProcess(0)
     }
 
 }

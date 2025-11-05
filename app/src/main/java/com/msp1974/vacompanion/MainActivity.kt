@@ -54,6 +54,7 @@ import com.msp1974.vacompanion.ui.VAViewModel
 import com.msp1974.vacompanion.broadcasts.BroadcastSender
 import com.msp1974.vacompanion.service.VABackgroundService
 import com.msp1974.vacompanion.settings.APPConfig
+import com.msp1974.vacompanion.settings.BackgroundTaskStatus
 import com.msp1974.vacompanion.ui.VADialog
 import com.msp1974.vacompanion.ui.components.VADialog
 import com.msp1974.vacompanion.ui.layouts.BlackScreen
@@ -149,9 +150,8 @@ class MainActivity : ComponentActivity(), EventListener, ComponentCallbacks2 {
 
 
         setContent {
-            AppTheme(darkMode = false, dynamicColor = false) {
-                val vaUiState by viewModel.vacaState.collectAsState()
-
+            val vaUiState by viewModel.vacaState.collectAsState()
+            AppTheme(darkMode = vaUiState.darkMode, dynamicColor = false) {
                 Surface(
                     modifier = Modifier
                         .fillMaxSize(),
@@ -165,7 +165,11 @@ class MainActivity : ComponentActivity(), EventListener, ComponentCallbacks2 {
                             WebViewScreen(webView)
                         }
                     } else {
-                        ConnectionScreen()
+                        if (!vaUiState.screenOn) {
+                            BlackScreen()
+                        } else {
+                            ConnectionScreen()
+                        }
                     }
                     when {
                         vaUiState.alertDialog != null -> {
@@ -242,8 +246,7 @@ class MainActivity : ComponentActivity(), EventListener, ComponentCallbacks2 {
             addAction(BroadcastSender.SATELLITE_STARTED)
             addAction(BroadcastSender.SATELLITE_STOPPED)
             addAction(BroadcastSender.VERSION_MISMATCH)
-            addAction(BroadcastSender.END_ACTIVITY)
-            addAction(BroadcastSender.TERMINATE)
+            addAction(BroadcastSender.WEBVIEW_CRASH)
         }
         LocalBroadcastManager.getInstance(this)
             .registerReceiver(satelliteBroadcastReceiver, filter)
@@ -269,13 +272,18 @@ class MainActivity : ComponentActivity(), EventListener, ComponentCallbacks2 {
                 }
                 BroadcastSender.SATELLITE_STOPPED -> {
                     viewModel.setSatelliteRunning(false)
+                    if (!config.backgroundTaskRunning) {
+                        finishAndRemoveTask()
+                    }
                 }
                 BroadcastSender.VERSION_MISMATCH -> {
                     runUpdateRoutine()
                 }
-                BroadcastSender.TERMINATE, BroadcastSender.END_ACTIVITY -> {
-                    finishAndRemoveTask()
-                    exitProcess(0)
+                BroadcastSender.WEBVIEW_CRASH -> {
+                    initWebView()
+                    val url = AuthUtils.getURL(webViewClient.getHAUrl())
+                    log.d("Loading URL: $url")
+                    webView.loadUrl(url)
                 }
             }
         }
@@ -308,6 +316,11 @@ class MainActivity : ComponentActivity(), EventListener, ComponentCallbacks2 {
     override fun onResume() {
         super.onResume()
         log.d("Main Activity resumed")
+        // Catch if background tasks not running
+        if (config.backgroundTaskStatus == BackgroundTaskStatus.NOT_STARTED ) {
+            log.e("Background task starting on resume as not running")
+            runBackgroundTasks()
+        }
         screen.hideSystemUI(window)
         setScreenAlwaysOn(config.screenAlwaysOn)
     }
@@ -321,7 +334,7 @@ class MainActivity : ComponentActivity(), EventListener, ComponentCallbacks2 {
     }
 
     private fun runBackgroundTasks() {
-        if ( config.backgroundTaskRunning ) {
+        if ( config.backgroundTaskStatus != BackgroundTaskStatus.NOT_STARTED ) {
             log.w("Background task already running.  Not starting from MainActivity")
             firebase.logEvent(FirebaseManager.MAIN_ACTIVITY_BACKGROUND_TASK_ALREADY_RUNNING, mapOf())
             if (config.isRunning) {
@@ -335,6 +348,8 @@ class MainActivity : ComponentActivity(), EventListener, ComponentCallbacks2 {
             }
             return
         }
+        config.backgroundTaskStatus = BackgroundTaskStatus.STARTING
+
         if (!updateProcessComplete) {
             Handler(Looper.getMainLooper()).postDelayed({
                 runBackgroundTasks()
@@ -343,9 +358,18 @@ class MainActivity : ComponentActivity(), EventListener, ComponentCallbacks2 {
         }
         log.d("Starting background tasks")
         setStatus(getString(R.string.status_waiting_for_connection))
-        Intent(this.applicationContext, VABackgroundService::class.java).also {
-            it.action = VABackgroundService.Actions.START.toString()
-            startService(it)
+        try {
+            Intent(this.applicationContext, VABackgroundService::class.java).also {
+                it.action = VABackgroundService.Actions.START.toString()
+                startService(it)
+            }
+        } catch (ex: Exception) {
+            log.w("Error starting background tasks - ${ex.message}")
+            log.w("Waking screen to allow background tasks to start")
+            config.backgroundTaskStatus = BackgroundTaskStatus.NOT_STARTED
+            viewModel.vacaState.value.screenOn = false
+            screenWake(true)
+            screenSleep()
         }
 
     }
@@ -369,12 +393,13 @@ class MainActivity : ComponentActivity(), EventListener, ComponentCallbacks2 {
         }
     }
 
-    fun screenWake() {
-        viewModel.setScreenOn(true)
+    fun screenWake(blackOut: Boolean = false) {
+        if (!blackOut) viewModel.setScreenOn(true)
         screen.setScreenTimeout(screenTimeout)
         setScreenAlwaysOn(config.screenAlwaysOn, false)
         setScreenAutoBrightness(config.screenAutoBrightness)
         setScreenBrightness(config.screenBrightness)
+        tempScreenTimeout = 0
         screen.wakeScreen()
     }
 

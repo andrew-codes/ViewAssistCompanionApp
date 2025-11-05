@@ -73,8 +73,8 @@ class CustomWebViewClient(viewModel: VAViewModel): WebViewClientCompat()  {
             view.reload()
         } catch (e: Exception) {
             log.e("Failed to reload webview: $e")
-            // Close activity and let service restart it
-            BroadcastSender.sendBroadcast(config.context, BroadcastSender.END_ACTIVITY)
+            // Broadcast to activity to handle webview restart
+            BroadcastSender.sendBroadcast(config.context, BroadcastSender.WEBVIEW_CRASH)
         }
         return true
     }

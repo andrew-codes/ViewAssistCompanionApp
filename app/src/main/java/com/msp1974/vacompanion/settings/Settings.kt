@@ -19,6 +19,12 @@ import java.util.UUID
 import kotlin.properties.Delegates
 import kotlin.reflect.KProperty
 
+enum class BackgroundTaskStatus {
+    NOT_STARTED,
+    STARTING,
+    STARTED,
+}
+
 class APPConfig(val context: Context) {
     private val sharedPrefs = PreferenceManager.getDefaultSharedPreferences(context.applicationContext)
     private val log = Logger()
@@ -56,6 +62,7 @@ class APPConfig(val context: Context) {
     var connectionCount: Int = 0
     var currentActivity: String = ""
     var backgroundTaskRunning: Boolean = false
+    var backgroundTaskStatus: BackgroundTaskStatus = BackgroundTaskStatus.NOT_STARTED
     var isRunning: Boolean = false
 
     var hasRecordAudioPermission: Boolean = true

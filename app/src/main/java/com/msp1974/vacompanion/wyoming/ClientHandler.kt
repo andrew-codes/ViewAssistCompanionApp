@@ -115,7 +115,7 @@ class ClientHandler(private val context: Context, private val server: WyomingTCP
         stop()
     }
 
-    private fun stop() {
+    fun stop() {
         log.d("Stopping client $client_id connection handler")
         stopIntervalPing()
 
