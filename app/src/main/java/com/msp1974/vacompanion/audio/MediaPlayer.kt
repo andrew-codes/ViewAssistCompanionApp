@@ -93,7 +93,7 @@ class VAMediaPlayer(val context: Context) {
                     mediaPlayer.setVolume(vol, vol)
                     isVolumeDucked = true
                 } else {
-                    log.d("Not ducking mMusic volume as it is lower than ducking volume of ${config.duckingVolume} at ${config.musicVolume}")
+                    log.d("Not ducking music volume as it is lower than ducking volume of ${config.duckingVolume} at ${config.musicVolume}")
                 }
             }
         }
