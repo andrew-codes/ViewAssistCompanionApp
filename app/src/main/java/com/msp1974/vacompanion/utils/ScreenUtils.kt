@@ -93,12 +93,7 @@ class ScreenUtils(val context: Context) : ContextWrapper(context) {
     }
 
     fun canWriteScreenSetting(): Boolean {
-        var hasPermission = true
-        //if (!config.requiresScreenWritePermission) {
-        //    return hasPermission
-        //}
-        hasPermission = Settings.System.canWrite(applicationContext)
-        return hasPermission
+        return Settings.System.canWrite(applicationContext)
     }
 
     fun isScreenOn(): Boolean {
@@ -111,7 +106,9 @@ class ScreenUtils(val context: Context) : ContextWrapper(context) {
     }
 
     fun setScreenTimeout(timeout: Int) {
-        Settings.System.putInt(contentResolver, Settings.System.SCREEN_OFF_TIMEOUT, timeout)
+        if (canWriteScreenSetting()) {
+            Settings.System.putInt(contentResolver, Settings.System.SCREEN_OFF_TIMEOUT, timeout)
+        }
     }
 
     fun hideSystemUI(window: Window) {

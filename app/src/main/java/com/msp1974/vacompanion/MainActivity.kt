@@ -15,17 +15,12 @@ import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.media.AudioManager
 import android.net.ConnectivityManager
-import android.net.LinkProperties
 import android.net.Network
-import android.net.NetworkCapabilities
-import android.net.Uri
 import android.os.Build
 import android.os.Bundle
-import android.os.Environment
 import android.os.Handler
 import android.os.Looper
 import android.os.StrictMode
-import android.provider.DocumentsContract
 import android.provider.Settings
 import android.view.Display
 import android.view.ViewGroup
@@ -36,9 +31,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
-import androidx.annotation.RequiresApi
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -48,9 +41,6 @@ import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.core.net.toUri
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
-import androidx.core.view.WindowCompat
-import androidx.core.view.WindowInsetsCompat
-import androidx.core.view.WindowInsetsControllerCompat
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import androidx.webkit.WebSettingsCompat
 import androidx.webkit.WebViewFeature
@@ -78,7 +68,6 @@ import com.msp1974.vacompanion.utils.ScreenUtils
 import com.msp1974.vacompanion.utils.Updater
 import kotlin.concurrent.thread
 import kotlin.getValue
-import kotlin.system.exitProcess
 
 
 class MainActivity : ComponentActivity(), EventListener, ComponentCallbacks2 {
@@ -99,6 +88,9 @@ class MainActivity : ComponentActivity(), EventListener, ComponentCallbacks2 {
     private var screenTimeout: Int = 30000
     private var tempScreenTimeout: Int = 0
     private var hasNetwork: Boolean = false
+
+    val dndPermissionsUnSupportedDevices = listOf("LenovoCD-24502F", "Google iot_msm8x53_som")
+
 
 
     @SuppressLint("HardwareIds", "SetTextI18n")
@@ -305,6 +297,11 @@ class MainActivity : ComponentActivity(), EventListener, ComponentCallbacks2 {
                 }
                 Intent.ACTION_SCREEN_OFF -> {
                     config.screenOn = false
+                    // Set screenTimeout in case it changed and this is a dream sleep
+                    // not a forced sleep
+                    if (tempScreenTimeout == 0) {
+                        screenTimeout = screen.getScreenTimeout()
+                    }
                 }
             }
         }
@@ -446,27 +443,35 @@ class MainActivity : ComponentActivity(), EventListener, ComponentCallbacks2 {
 
     fun screenWake(blackOut: Boolean = false) {
         if (!blackOut) viewModel.setScreenOn(true)
-        screen.setScreenTimeout(screenTimeout)
         setScreenAlwaysOn(config.screenAlwaysOn, false)
         setScreenAutoBrightness(config.screenAutoBrightness)
         setScreenBrightness(config.screenBrightness)
-        tempScreenTimeout = 0
         screen.wakeScreen()
+        if (screen.canWriteScreenSetting()) {
+            screen.setScreenTimeout(screenTimeout)
+            tempScreenTimeout = 0
+        } else {
+            config.screenOn = true
+        }
     }
 
     fun screenSleep() {
         viewModel.setScreenOn(false)
-        if (tempScreenTimeout == 0) {
-            screenTimeout = screen.getScreenTimeout()
-            tempScreenTimeout = 1000
-        }
-        screen.setScreenTimeout(tempScreenTimeout)
         setScreenAlwaysOn(false)
         setScreenAutoBrightness(false)
         setScreenBrightness(0.01f)
-        Handler(Looper.getMainLooper()).postDelayed({
-            resetScreenParams()
-        }, 1000)
+        if (screen.canWriteScreenSetting()) {
+            if (tempScreenTimeout == 0) {
+                screenTimeout = screen.getScreenTimeout()
+                tempScreenTimeout = 1000
+            }
+            screen.setScreenTimeout(tempScreenTimeout)
+            Handler(Looper.getMainLooper()).postDelayed({
+                resetScreenParams()
+            }, 1000)
+        } else {
+            config.screenOn = false
+        }
     }
 
     private fun resetScreenParams() {
@@ -689,8 +694,7 @@ class MainActivity : ComponentActivity(), EventListener, ComponentCallbacks2 {
 
     private fun checkAndRequestNotificationAccessPolicyPermission() {
         val notificationManager =  this.getSystemService(NOTIFICATION_SERVICE) as NotificationManager
-        val unsupportedDevices = listOf("LenovoCD-24502F", "Google iot_msm8x53_som")
-        if (!notificationManager.isNotificationPolicyAccessGranted && Helpers.getDeviceName().toString() !in unsupportedDevices) {
+        if (!notificationManager.isNotificationPolicyAccessGranted && Helpers.getDeviceName().toString() !in dndPermissionsUnSupportedDevices) {
             // If not granted, prompt the user to give permission.
             val alertDialog = AlertDialog.Builder(this)
             log.d("Requesting notification access policy permission")
@@ -708,7 +712,7 @@ class MainActivity : ComponentActivity(), EventListener, ComponentCallbacks2 {
                 }
             }.create().show()
         } else {
-            log.d("Notification access policy permission already granted")
+            log.d("Notification access policy permission already granted or not supported")
             initialise()
         }
     }
