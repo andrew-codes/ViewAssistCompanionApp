@@ -5,10 +5,12 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Context.CONNECTIVITY_SERVICE
 import android.net.ConnectivityManager
+import android.net.wifi.WifiManager
 import android.os.Build
 import androidx.annotation.RequiresPermission
 import java.net.Inet4Address
 import java.net.NetworkInterface
+
 
 class Helpers {
     companion object {
@@ -40,8 +42,15 @@ class Helpers {
 
         @RequiresPermission(permission.ACCESS_NETWORK_STATE)
         fun isNetworkAvailable(context: Context): Boolean {
-            val cm = context.getSystemService(CONNECTIVITY_SERVICE) as ConnectivityManager
-            return cm.activeNetwork != null
+            val connMgr = context.getSystemService(CONNECTIVITY_SERVICE) as ConnectivityManager
+            return connMgr.activeNetwork != null
+        }
+
+        fun enableWifi(context: Context, enable: Boolean) {
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+                val wifiManager = context.getSystemService(Context.WIFI_SERVICE) as WifiManager
+                wifiManager.setWifiEnabled(enable)
+            }
         }
 
         fun isNumber(input: String): Boolean {

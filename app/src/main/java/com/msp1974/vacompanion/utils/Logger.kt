@@ -46,6 +46,8 @@ class FirebaseManager {
         const val MAIN_ACTIVITY_BACKGROUND_TASK_ALREADY_RUNNING = "main_background_task_already_running"
         const val TRIM_MEMORY_UI_HIDDEN = "trim_memory_ui_hidden"
         const val TRIM_MEMORY_BACKGROUND = "trim_memory_background"
+        const val LOST_NETWORK = "lost_network"
+
     }
 
     fun Map<String, Any?>.toBundle(): Bundle = bundleOf(*this.toList().toTypedArray())

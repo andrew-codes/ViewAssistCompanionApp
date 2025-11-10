@@ -14,6 +14,10 @@ import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.media.AudioManager
+import android.net.ConnectivityManager
+import android.net.LinkProperties
+import android.net.Network
+import android.net.NetworkCapabilities
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -94,6 +98,8 @@ class MainActivity : ComponentActivity(), EventListener, ComponentCallbacks2 {
     private var firstLoad: Boolean = true
     private var screenTimeout: Int = 30000
     private var tempScreenTimeout: Int = 0
+    private var hasNetwork: Boolean = false
+
 
     @SuppressLint("HardwareIds", "SetTextI18n")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -141,6 +147,8 @@ class MainActivity : ComponentActivity(), EventListener, ComponentCallbacks2 {
 
         setStatus(getString(R.string.status_initialising))
         keepSplashScreen = false
+
+        registerWifiMonitor()
 
         // Init webview setup
         initWebView()
@@ -229,7 +237,6 @@ class MainActivity : ComponentActivity(), EventListener, ComponentCallbacks2 {
             setStatus(getString(R.string.status_no_permissions))
             return
         }
-        val hasNetwork = Helpers.isNetworkAvailable(this)
         if (!hasNetwork) {
             setStatus(getString(R.string.status_waiting_for_network))
             Handler(Looper.getMainLooper()).postDelayed({
@@ -250,6 +257,13 @@ class MainActivity : ComponentActivity(), EventListener, ComponentCallbacks2 {
         }
         LocalBroadcastManager.getInstance(this)
             .registerReceiver(satelliteBroadcastReceiver, filter)
+
+        val screenIntentFilter = IntentFilter().apply {
+            addAction(Intent.ACTION_SCREEN_ON)
+            addAction(Intent.ACTION_SCREEN_OFF)
+        }
+        registerReceiver(satelliteBroadcastReceiver, screenIntentFilter)
+
 
         config.eventBroadcaster.addListener(this)
 
@@ -285,8 +299,44 @@ class MainActivity : ComponentActivity(), EventListener, ComponentCallbacks2 {
                     log.d("Loading URL: $url")
                     webView.loadUrl(url)
                 }
+                Intent.ACTION_SCREEN_ON -> {
+                    log.d("Screen on broadcast receive")
+                }
+                Intent.ACTION_SCREEN_OFF -> {
+                    log.d("Screen off broadcast receive")
+                }
             }
         }
+    }
+
+
+    fun registerWifiMonitor() {
+        val connectivityManager = getSystemService(CONNECTIVITY_SERVICE) as ConnectivityManager
+        connectivityManager.registerDefaultNetworkCallback(object : ConnectivityManager.NetworkCallback() {
+            override fun onAvailable(network: Network) {
+                log.i("Network connection available")
+                hasNetwork = true
+                viewModel.onNetworkStateChange()
+                setStatus(getString(R.string.status_waiting_for_connection))
+            }
+
+            override fun onLost(network: Network) {
+                log.e("Lost network connection")
+                hasNetwork = false
+                viewModel.onNetworkStateChange()
+
+                val delay = 10
+                setStatus(getString(R.string.status_waiting_for_network))
+                if (config.enableNetworkRecovery) {
+                    log.d("Disabling wifi for ${delay}s")
+                    Helpers.enableWifi(this@MainActivity, false)
+                    Handler(Looper.getMainLooper()).postDelayed({
+                        log.d("Enabling wifi")
+                        Helpers.enableWifi(this@MainActivity, true)
+                    }, (delay * 1000).toLong())
+                }
+            }
+        })
     }
 
     fun setStatus(status: String) {
@@ -317,7 +367,7 @@ class MainActivity : ComponentActivity(), EventListener, ComponentCallbacks2 {
         super.onResume()
         log.d("Main Activity resumed")
         // Catch if background tasks not running
-        if (config.backgroundTaskStatus == BackgroundTaskStatus.NOT_STARTED ) {
+        if (Helpers.isNetworkAvailable(this) && config.backgroundTaskStatus == BackgroundTaskStatus.NOT_STARTED ) {
             log.e("Background task starting on resume as not running")
             runBackgroundTasks()
         }

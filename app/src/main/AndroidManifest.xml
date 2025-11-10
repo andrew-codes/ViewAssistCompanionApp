@@ -14,6 +14,9 @@
     <!--Allow wake lock to keep screen on-->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
 
+    <!--Allow wifi toggling on Android 9 and below-->
+    <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
+
     <!--Allow to disable key guard-->
     <uses-permission android:name="android.permission.DISABLE_KEYGUARD" />
 

@@ -1,5 +1,6 @@
 package com.msp1974.vacompanion.ui
 
+import android.content.Context
 import android.content.res.Configuration
 import android.content.res.Resources
 import androidx.compose.material3.DrawerState
@@ -200,12 +201,16 @@ class VAViewModel: ViewModel(), EventListener {
         }
     }
 
+    fun onNetworkStateChange() {
+        buildAppInfo()
+    }
+
     private fun buildAppInfo() {
        _vacaState.update { currentState ->
             currentState.copy(
                 appInfo = mapOf(
                     "Version" to config!!.version,
-                    "IP Address" to Helpers.getIpv4HostAddress(),
+                    "IP Address" to (if (Helpers.isNetworkAvailable(config!!.context)) Helpers.getIpv4HostAddress() else ""),
                     "Port" to APPConfig.SERVER_PORT.toString(),
                     "UUID" to config!!.uuid,
                     "Paired to" to config!!.pairedDeviceID,

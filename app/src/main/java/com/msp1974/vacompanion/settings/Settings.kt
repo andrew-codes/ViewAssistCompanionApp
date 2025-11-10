@@ -153,6 +153,11 @@ class APPConfig(val context: Context) {
         onValueChangedListener(property, oldValue, newValue)
     }
 
+    var enableNetworkRecovery: Boolean by Delegates.observable(true) { property, oldValue, newValue ->
+        onValueChangedListener(property, oldValue, newValue)
+    }
+
+
 
 
     // SharedPreferences
@@ -262,6 +267,9 @@ class APPConfig(val context: Context) {
         }
         if (settings.has("screen_on")) {
             screenOn = settings.getBoolean("screen_on")
+        }
+        if (settings.has("enable_network_recovery")) {
+            enableNetworkRecovery = settings.getBoolean("enable_network_recovery")
         }
         Firebase.crashlytics.log("Settings update")
     }
