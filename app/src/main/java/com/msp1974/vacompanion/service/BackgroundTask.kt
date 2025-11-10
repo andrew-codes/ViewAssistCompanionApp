@@ -139,6 +139,24 @@ internal class BackgroundTaskController (private val context: Context): EventLis
                     zeroConf.registerService(config.serverPort)
                 }
             }
+            "currentPath" -> {
+                server.sendStatus(
+                    buildJsonObject {
+                        putJsonObject("sensors", {
+                            put("current_path", event.newValue.toString())
+                        })
+                    }
+                )
+            }
+            "screenOn" -> {
+                server.sendStatus(
+                    buildJsonObject {
+                        putJsonObject("sensors", {
+                            put("screen_on", event.newValue as Boolean)
+                        })
+                    }
+                )
+            }
             else -> consumed = false
         }
         if (consumed) {

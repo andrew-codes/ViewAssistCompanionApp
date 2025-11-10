@@ -3,26 +3,26 @@ package com.msp1974.vacompanion.utils
 import android.annotation.SuppressLint
 import android.content.DialogInterface
 import android.content.res.Configuration
-import android.graphics.Bitmap
 import android.net.http.SslError
 import android.os.Handler
 import android.os.Looper
+import android.view.View
 import android.webkit.RenderProcessGoneDetail
 import android.webkit.SslErrorHandler
-import android.webkit.WebSettings
 import android.webkit.WebView
-import androidx.webkit.WebViewFeature
-import androidx.webkit.WebSettingsCompat
 import androidx.appcompat.app.AlertDialog
+import androidx.webkit.WebSettingsCompat
 import androidx.webkit.WebSettingsCompat.DARK_STRATEGY_PREFER_WEB_THEME_OVER_USER_AGENT_DARKENING
 import androidx.webkit.WebViewClientCompat
+import androidx.webkit.WebViewFeature
 import com.msp1974.vacompanion.R
 import com.msp1974.vacompanion.broadcasts.BroadcastSender
 import com.msp1974.vacompanion.jsinterface.ExternalAuthCallback
 import com.msp1974.vacompanion.jsinterface.WebAppInterface
 import com.msp1974.vacompanion.jsinterface.WebViewJavascriptInterface
 import com.msp1974.vacompanion.ui.VAViewModel
-import kotlin.math.max
+import java.net.URL
+
 
 class CustomWebViewClient(viewModel: VAViewModel): WebViewClientCompat()  {
     val log = Logger()
@@ -233,5 +233,13 @@ class CustomWebViewClient(viewModel: VAViewModel): WebViewClientCompat()  {
                 return false
             }
         }
+    }
+
+    override fun doUpdateVisitedHistory(
+        view: WebView,
+        url: String,
+        isReload: Boolean,
+    ) {
+        config.currentPath = URL(url).path
     }
 }

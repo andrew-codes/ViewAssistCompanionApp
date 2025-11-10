@@ -280,6 +280,7 @@ class MainActivity : ComponentActivity(), EventListener, ComponentCallbacks2 {
                 BroadcastSender.SATELLITE_STARTED -> {
                     viewModel.setSatelliteRunning(true)
                     setZoomLevel(config.zoomLevel)
+                    config.screenOn = screen.isScreenOn()
                     val url = AuthUtils.getURL(webViewClient.getHAUrl())
                     log.d("Loading URL: $url")
                     webView.loadUrl(url)
@@ -300,10 +301,10 @@ class MainActivity : ComponentActivity(), EventListener, ComponentCallbacks2 {
                     webView.loadUrl(url)
                 }
                 Intent.ACTION_SCREEN_ON -> {
-                    log.d("Screen on broadcast receive")
+                    config.screenOn = true
                 }
                 Intent.ACTION_SCREEN_OFF -> {
-                    log.d("Screen off broadcast receive")
+                    config.screenOn = false
                 }
             }
         }

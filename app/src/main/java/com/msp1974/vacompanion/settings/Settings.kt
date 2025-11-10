@@ -156,6 +156,10 @@ class APPConfig(val context: Context) {
     var enableNetworkRecovery: Boolean by Delegates.observable(true) { property, oldValue, newValue ->
         onValueChangedListener(property, oldValue, newValue)
     }
+    var currentPath: String by Delegates.observable("") { property, oldValue, newValue ->
+        onValueChangedListener(property, oldValue, newValue)
+    }
+
 
 
 
