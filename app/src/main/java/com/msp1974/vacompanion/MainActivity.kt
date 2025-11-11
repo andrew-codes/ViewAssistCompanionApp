@@ -2,6 +2,7 @@ package com.msp1974.vacompanion
 
 import android.Manifest.permission
 import android.annotation.SuppressLint
+import android.app.Activity
 import android.app.AlertDialog
 import android.app.NotificationManager
 import android.app.UiModeManager
@@ -25,6 +26,7 @@ import android.provider.Settings
 import android.view.Display
 import android.view.ViewGroup
 import android.view.WindowManager
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.compose.setContent
@@ -84,12 +86,12 @@ class MainActivity : ComponentActivity(), EventListener, ComponentCallbacks2 {
     private lateinit var updater: Updater
     private var screenOrientation: Int = 0
     private var updateProcessComplete: Boolean = true
-    private var firstLoad: Boolean = true
+    private var initialised: Boolean = false
     private var screenTimeout: Int = 30000
     private var tempScreenTimeout: Int = 0
     private var hasNetwork: Boolean = false
 
-    val dndPermissionsUnSupportedDevices = listOf("LenovoCD-24502F", "Google iot_msm8x53_som")
+    val dndPermissionsUnSupportedDevices = listOf("LenovoCD-24502F") //, "Google iot_msm8x53_som")
 
 
 
@@ -161,7 +163,6 @@ class MainActivity : ComponentActivity(), EventListener, ComponentCallbacks2 {
                         if (!vaUiState.screenOn) {
                             BlackScreen()
                         } else {
-                            firstLoad = false
                             WebViewScreen(webView)
                         }
                     } else {
@@ -263,6 +264,7 @@ class MainActivity : ComponentActivity(), EventListener, ComponentCallbacks2 {
 
         // Start background tasks
         runBackgroundTasks()
+        initialised = true
     }
 
     // Initiate wake word broadcast receiver
@@ -365,8 +367,8 @@ class MainActivity : ComponentActivity(), EventListener, ComponentCallbacks2 {
         super.onResume()
         log.d("Main Activity resumed")
         // Catch if background tasks not running
-        if (Helpers.isNetworkAvailable(this) && config.backgroundTaskStatus == BackgroundTaskStatus.NOT_STARTED ) {
-            log.e("Background task starting on resume as not running")
+        if (initialised && Helpers.isNetworkAvailable(this) && config.backgroundTaskStatus == BackgroundTaskStatus.NOT_STARTED ) {
+            log.e("Background task starting on resume as is is not running")
             runBackgroundTasks()
         }
         screen.hideSystemUI(window)
@@ -434,6 +436,7 @@ class MainActivity : ComponentActivity(), EventListener, ComponentCallbacks2 {
             "screenBrightness" -> runOnUiThread { setScreenBrightness(event.newValue as Float) }
             "screenWake" -> runOnUiThread { screenWake() }
             "screenSleep" -> runOnUiThread { screenSleep() }
+            "showToastMessage" -> runOnUiThread { Toast.makeText(this, event.newValue as String, Toast.LENGTH_SHORT).show() }
             else -> consumed = false
         }
         if (consumed) {
@@ -663,8 +666,7 @@ class MainActivity : ComponentActivity(), EventListener, ComponentCallbacks2 {
     }
 
     private fun checkAndRequestWriteSettingsPermission() {
-        val unsupportedDevices = listOf("None")
-        if (config.canSetScreenWritePermission && !ScreenUtils(this).canWriteScreenSetting() && Helpers.getDeviceName().toString() !in unsupportedDevices) {
+        if (config.canSetScreenWritePermission && !ScreenUtils(this).canWriteScreenSetting()) {
             val alertDialog = AlertDialog.Builder(this)
             log.d("Requesting write settings permission")
             alertDialog.apply {
@@ -689,12 +691,16 @@ class MainActivity : ComponentActivity(), EventListener, ComponentCallbacks2 {
     }
 
     private val onNotificationAccessPolicyPermissionActivityResult = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+        log.i("Notification access policy permission result -> ${it.resultCode}")
+        if (it.resultCode == RESULT_CANCELED) {
+            config.canSetNotificationPolicyAccess = false
+        }
         initialise()
     }
 
     private fun checkAndRequestNotificationAccessPolicyPermission() {
         val notificationManager =  this.getSystemService(NOTIFICATION_SERVICE) as NotificationManager
-        if (!notificationManager.isNotificationPolicyAccessGranted && Helpers.getDeviceName().toString() !in dndPermissionsUnSupportedDevices) {
+        if (config.canSetNotificationPolicyAccess && !notificationManager.isNotificationPolicyAccessGranted) {
             // If not granted, prompt the user to give permission.
             val alertDialog = AlertDialog.Builder(this)
             log.d("Requesting notification access policy permission")

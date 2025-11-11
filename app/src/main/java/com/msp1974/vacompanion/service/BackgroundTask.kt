@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Context.NOTIFICATION_SERVICE
 import android.content.res.AssetManager
 import android.media.AudioManager
+import android.widget.Toast
 import com.msp1974.vacompanion.Zeroconf
 import com.msp1974.vacompanion.audio.AudioDSP
 import com.msp1974.vacompanion.audio.AudioInCallback
@@ -349,14 +350,17 @@ internal class BackgroundTaskController (private val context: Context): EventLis
     }
 
     fun setDoNotDisturb(enable: Boolean) {
-        log.d("Setting do not disturb to $enable")
         val notificationManager =  context.getSystemService(NOTIFICATION_SERVICE) as NotificationManager
         if (notificationManager.isNotificationPolicyAccessGranted) {
+            log.d("Setting do not disturb to $enable")
             if (enable) {
                 notificationManager.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_NONE)
             } else {
                 notificationManager.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_ALL)
             }
+        } else {
+            log.w("Unable to set do not disturb, notification policy access not granted")
+            config.eventBroadcaster.notifyEvent(Event("showToastMessage", "", "Unable to set do not disturb.  Permission not granted."))
         }
     }
 }

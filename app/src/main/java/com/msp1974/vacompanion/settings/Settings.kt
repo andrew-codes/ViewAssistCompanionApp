@@ -169,6 +169,10 @@ class APPConfig(val context: Context) {
         get() = this.sharedPrefs.getBoolean("can_set_screen_write_permission", true)
         set(value) = this.sharedPrefs.edit { putBoolean("can_set_screen_write_permission", value) }
 
+    var canSetNotificationPolicyAccess: Boolean
+        get() = this.sharedPrefs.getBoolean("can_set_notification_policy_access", true)
+        set(value) = this.sharedPrefs.edit { putBoolean("can_set_notification_policy_access", value) }
+
     var startOnBoot: Boolean
         get() = this.sharedPrefs.getBoolean("startOnBoot", false)
         set(value) = this.sharedPrefs.edit { putBoolean("startOnBoot", value) }
