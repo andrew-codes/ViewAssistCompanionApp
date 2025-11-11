@@ -92,6 +92,18 @@ class ScreenUtils(val context: Context) : ContextWrapper(context) {
         wakeLock?.acquire(1000)
     }
 
+    fun setPartialWakeLock() {
+        if (wakeLock != null && wakeLock!!.isHeld) {
+            wakeLock!!.release()
+        }
+        val pm = getSystemService(POWER_SERVICE) as PowerManager
+        wakeLock = pm.newWakeLock(
+            PowerManager.PARTIAL_WAKE_LOCK,
+            "vacompanion.ScreenUtils:partialWakeLock"
+        )
+        wakeLock?.acquire()
+    }
+
     fun canWriteScreenSetting(): Boolean {
         return Settings.System.canWrite(applicationContext)
     }

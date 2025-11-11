@@ -149,6 +149,10 @@ class APPConfig(val context: Context) {
         onValueChangedListener(property, oldValue, newValue)
     }
 
+    var screenOnBump: Boolean by Delegates.observable(false) { property, oldValue, newValue ->
+        onValueChangedListener(property, oldValue, newValue)
+    }
+
     var screenOn: Boolean by Delegates.observable(false) { property, oldValue, newValue ->
         onValueChangedListener(property, oldValue, newValue)
     }
@@ -156,9 +160,12 @@ class APPConfig(val context: Context) {
     var enableNetworkRecovery: Boolean by Delegates.observable(true) { property, oldValue, newValue ->
         onValueChangedListener(property, oldValue, newValue)
     }
+
     var currentPath: String by Delegates.observable("") { property, oldValue, newValue ->
         onValueChangedListener(property, oldValue, newValue)
     }
+
+
 
 
 
@@ -272,6 +279,9 @@ class APPConfig(val context: Context) {
         }
         if (settings.has("screen_on_wake_word")) {
             screenOnWakeWord = settings.getBoolean("screen_on_wake_word")
+        }
+        if (settings.has("screen_on_bump")) {
+            screenOnBump = settings.getBoolean("screen_on_bump")
         }
         if (settings.has("screen_on")) {
             screenOn = settings.getBoolean("screen_on")

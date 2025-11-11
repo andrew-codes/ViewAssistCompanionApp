@@ -24,6 +24,7 @@ import android.os.Looper
 import android.os.StrictMode
 import android.provider.Settings
 import android.view.Display
+import android.view.MotionEvent
 import android.view.ViewGroup
 import android.view.WindowManager
 import android.widget.Toast
@@ -436,6 +437,7 @@ class MainActivity : ComponentActivity(), EventListener, ComponentCallbacks2 {
             "screenBrightness" -> runOnUiThread { setScreenBrightness(event.newValue as Float) }
             "screenWake" -> runOnUiThread { screenWake() }
             "screenSleep" -> runOnUiThread { screenSleep() }
+            "deviceBump" -> runOnUiThread { if (config.screenOnBump) screenWake() }
             "showToastMessage" -> runOnUiThread { Toast.makeText(this, event.newValue as String, Toast.LENGTH_SHORT).show() }
             else -> consumed = false
         }
@@ -463,6 +465,7 @@ class MainActivity : ComponentActivity(), EventListener, ComponentCallbacks2 {
         setScreenAlwaysOn(false)
         setScreenAutoBrightness(false)
         setScreenBrightness(0.01f)
+        screen.setPartialWakeLock()
         if (screen.canWriteScreenSetting()) {
             if (tempScreenTimeout == 0) {
                 screenTimeout = screen.getScreenTimeout()
