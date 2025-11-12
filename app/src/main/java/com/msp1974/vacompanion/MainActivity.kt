@@ -113,14 +113,6 @@ class MainActivity : ComponentActivity(), EventListener, ComponentCallbacks2 {
         screen = ScreenUtils(this)
         updater = Updater(this)
 
-        // If we get in a mess with short screen timeout to turn off
-        // screen, set a decent timeout here.
-        screenTimeout = screen.getScreenTimeout()
-        if (screenTimeout < 15000) {
-            screenTimeout = 15000
-            screen.setScreenTimeout(screenTimeout)
-        }
-
         webView = CustomWebView.getView(this)
         webViewClient = CustomWebViewClient(viewModel)
         webView.webViewClient = webViewClient
@@ -237,6 +229,14 @@ class MainActivity : ComponentActivity(), EventListener, ComponentCallbacks2 {
                 initialise()
             }, 1000)
             return
+        }
+
+        // If we get in a mess with short screen timeout to turn off
+        // screen, set a decent timeout here.
+        screenTimeout = screen.getScreenTimeout()
+        if (screenTimeout < 15000) {
+            screenTimeout = 15000
+            screen.setScreenTimeout(screenTimeout)
         }
 
         // Make volume keys adjust music stream
