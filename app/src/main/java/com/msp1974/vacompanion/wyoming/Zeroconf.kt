@@ -1,15 +1,14 @@
-package com.msp1974.vacompanion
+package com.msp1974.vacompanion.wyoming
 
 import android.content.Context
 import android.net.nsd.NsdManager
-import android.net.nsd.NsdManager.RegistrationListener
 import android.net.nsd.NsdServiceInfo
 import com.msp1974.vacompanion.settings.APPConfig
 
 internal class Zeroconf(private val context: Context) {
     private var nsdManager: NsdManager? = null
-    private var registrationListener: RegistrationListener? = null
-    private val config = APPConfig.getInstance(context)
+    private var registrationListener: NsdManager.RegistrationListener? = null
+    private val config = APPConfig.Companion.getInstance(context)
     private var isRegistered: Boolean = false
     var serviceName: String? = null
 
@@ -38,7 +37,7 @@ internal class Zeroconf(private val context: Context) {
     }
 
     fun initializeRegistrationListener() {
-        registrationListener = object : RegistrationListener {
+        registrationListener = object : NsdManager.RegistrationListener {
             override fun onServiceRegistered(nsdServiceInfo: NsdServiceInfo) {
                 // Save the service name. Android may have changed it in order to
                 // resolve a conflict, so update the name you initially requested

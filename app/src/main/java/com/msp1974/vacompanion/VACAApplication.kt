@@ -4,12 +4,16 @@ import android.app.Application
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import com.msp1974.vacompanion.utils.ActivityManager
+import timber.log.Timber
+import timber.log.Timber.DebugTree
 
 class VACAApplication: Application() {
     override fun onCreate() {
         super.onCreate()
 
         activityManager = ActivityManager(this)
+
+        Timber.plant(DebugTree())
 
         // Create the notification channel (required for Android 8.0 and above)
         val channel = NotificationChannel(

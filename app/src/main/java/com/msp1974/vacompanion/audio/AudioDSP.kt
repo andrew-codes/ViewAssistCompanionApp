@@ -20,6 +20,18 @@ class AudioDSP {
         return audioBuffer
     }
 
+    fun autoGain(audioBuffer: FloatArray, sensitivity: Int = 0): FloatArray {
+        val max = audioBuffer.maxOrNull() ?: 0f
+        val min = audioBuffer.minOrNull() ?: 0f
+        val range = max - min
+        val gain = (0.61f + (sensitivity * 0.03f)) / range
+
+        if (gain != 1f) {
+            val output = audioBuffer.map { (it * gain) }.toFloatArray()
+            return output
+        }
+        return audioBuffer
+    }
 
     fun lowPassSPFilter(input: FloatArray, freq: Float, sampleRate: Float): FloatArray {
         val filter = LowPassSPFilter(freq, sampleRate)
@@ -36,7 +48,12 @@ class AudioDSP {
         return filter.process(input)
     }
 
-    fun bandPassFilter(input: FloatArray, freq: Float, bandwidth: Float, sampleRate: Float): FloatArray {
+    fun bandPassFilter(
+        input: FloatArray,
+        freq: Float,
+        bandwidth: Float,
+        sampleRate: Float
+    ): FloatArray {
         val filter = BandPassFilter(freq, bandwidth, sampleRate)
         return filter.process(input)
     }
@@ -56,6 +73,15 @@ class AudioDSP {
         return byteBuffer
     }
 
+    fun floatArrayToByteBuffer(audioBuffer: FloatArray): ByteArray {
+        val byteBuffer = ByteArray(audioBuffer.size * 2)
+        for (i in audioBuffer.indices) {
+            val value: Int = (audioBuffer[i] * 32768.0f).toInt()
+            byteBuffer[i * 2] = (value and 0xFF).toByte()
+            byteBuffer[i * 2 + 1] = (value shr 8).toByte()
+        }
+        return byteBuffer
+    }
 }
 
 class LowPassSPFilter: IIRFilter {

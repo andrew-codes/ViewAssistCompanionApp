@@ -4,6 +4,7 @@ import android.Manifest
 import android.app.KeyguardManager
 import android.app.PendingIntent
 import android.app.Service
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
@@ -23,6 +24,11 @@ import com.msp1974.vacompanion.broadcasts.BroadcastSender
 import com.msp1974.vacompanion.settings.APPConfig
 import com.msp1974.vacompanion.settings.BackgroundTaskStatus
 import com.msp1974.vacompanion.utils.Logger
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import timber.log.Timber
 import java.util.Timer
 import java.util.TimerTask
 import kotlin.system.exitProcess
@@ -47,7 +53,7 @@ class VABackgroundService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-
+        log.e("OnCreate running")
         config = APPConfig.getInstance(this)
 
         // wifi lock
@@ -67,10 +73,18 @@ class VABackgroundService : Service() {
     * Main process for the service
     * */
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        when (intent?.action) {
+        var action = intent?.action ?: Actions.START.toString()
+        log.d("onStartCommand action: $action")
+        if (intent == null) {
+            log.e("VACA restarted by OS after crash")
+            startActivity(this)
+            action = Actions.START.toString()
+        }
+        // Do the work that the service needs to do here
+        when (action) {
             Actions.START.toString() -> {
                 Firebase.crashlytics.log("Background service starting")
-                if (!checkIfPermissionIsGranted()) return START_NOT_STICKY
+                if (!checkIfPermissionIsGranted()) return START_STICKY
 
                 //need core 1.12 and higher and SDK 30 and higher
                 var requires: Int = 0
@@ -133,6 +147,7 @@ class VABackgroundService : Service() {
                         log.e("Foreground service failed to launch activity - ${ex.message}")
                     }
                 }
+                restartActivityWatchdog()
             }
             Actions.STOP.toString() -> {
                 Firebase.crashlytics.log("Background service stopping")
@@ -144,19 +159,22 @@ class VABackgroundService : Service() {
         return START_STICKY
     }
 
+    private fun startActivity(context: Context) {
+        try {
+            val myIntent = Intent(context, MainActivity::class.java)
+            myIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            applicationContext.startActivity(myIntent)
+        } catch (ex: Exception) {
+            log.e("Watchdog failed to restart activity - ${ex.message}")
+        }
+    }
+
     private fun restartActivityWatchdog() {
         watchdogTimer.schedule(object: TimerTask() {
             override fun run() {
                 if (VACAApplication.activityManager.activity == null) {
                     log.d("Watchdog detected activity not running.  Restarting...")
-                    try {
-                        Intent(this@VABackgroundService, MainActivity::class.java).also {
-                            it.flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                            startActivity(it)
-                        }
-                    } catch (ex: Exception) {
-                        log.e("Watchdog failed to restart activity - ${ex.message}")
-                    }
+                    startActivity(this@VABackgroundService)
                 }
             }
         },0,5000)
