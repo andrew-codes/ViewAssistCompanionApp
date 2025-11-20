@@ -17,6 +17,7 @@ import android.hardware.camera2.TotalCaptureResult
 import android.media.ImageReader
 import android.os.Handler
 import android.os.Looper
+import android.util.Range
 import android.util.Size
 import android.view.Surface
 import androidx.core.app.ActivityCompat
@@ -31,6 +32,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import timber.log.Timber
+import java.awt.font.NumericShaper
 import kotlin.math.absoluteValue
 
 
@@ -262,9 +264,12 @@ class CameraBackgroundTask(val context: Context) {
                 targetSurfaces.add(imageReader!!.surface)
                 addTarget(imageReader!!.surface)
 
+                val fps = Range(5, 5)
+
                 // Set some additional parameters for the request
-                set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_OFF)
-                //set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_ON_AUTO_FLASH)
+                set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_AUTO)
+                set(CaptureRequest.CONTROL_AE_TARGET_FPS_RANGE,fps)
+                set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_ON)
             }
 
             // Prepare CameraCaptureSession
@@ -282,6 +287,7 @@ class CameraBackgroundTask(val context: Context) {
                             // Now we can start capturing
                             captureRequest = requestBuilder.build()
                             captureSession!!.setRepeatingRequest(captureRequest!!, captureCallback, null)
+
 
                         } catch (e: CameraAccessException) {
                             log.e("createCaptureSession - $e")
