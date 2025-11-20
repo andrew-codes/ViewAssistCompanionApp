@@ -3,7 +3,7 @@ package com.rementia.openwakeword.lib.model
 /**
  * Detection mode for handling multiple wake word models.
  * 
- * This enum determines how the [WakeWordEngine] processes and emits detections 
+ * This enum determines how the WakeWordEngine processes and emits detections
  * when multiple models detect wake words simultaneously in the same audio frame.
  * 
  * ## Mode Selection Guidelines
@@ -53,8 +53,7 @@ package com.rementia.openwakeword.lib.model
  * )
  * // All detected commands are emitted
  * ```
- * 
- * @see WakeWordEngine
+ *
  */
 enum class DetectionMode {
     /**

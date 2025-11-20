@@ -9,7 +9,7 @@ import kotlin.io.path.absolutePathString
 import kotlin.io.path.forEachDirectoryEntry
 import kotlin.io.path.isDirectory
 
-data class WakeWord(val name: String, val fileName: String, val custom: Boolean = false)
+data class WakeWord(val name: String, val fileName: String, val builtIn: Boolean = true)
 
 class WakeWords(val context: Context) {
     var availableWakeWords = mapOf(
@@ -34,7 +34,7 @@ class WakeWords(val context: Context) {
                 val key = entry.fileName.toString().replace(".onnx", "").lowercase()
                 val name = key.replace("_", " ")
 
-                customWakeWords[key] = WakeWord(name.capitalizeWords(), entry.absolutePathString(), true)
+                customWakeWords[key] = WakeWord(name.capitalizeWords(), entry.absolutePathString(), false)
             })
         }
 
@@ -45,7 +45,7 @@ class WakeWords(val context: Context) {
                 val key = entry.fileName.toString().replace(".onnx", "").lowercase()
                 val name = key.replace("_", " ")
 
-                customWakeWords[key] = WakeWord(name.capitalizeWords(), entry.absolutePathString(), true)
+                customWakeWords[key] = WakeWord(name.capitalizeWords(), entry.absolutePathString(), false)
             })
         }
         return customWakeWords

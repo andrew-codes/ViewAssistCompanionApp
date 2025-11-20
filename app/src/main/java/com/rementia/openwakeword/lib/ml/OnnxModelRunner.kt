@@ -4,14 +4,16 @@ import ai.onnxruntime.OnnxTensor
 import ai.onnxruntime.OrtEnvironment
 import ai.onnxruntime.OrtSession
 import android.content.res.AssetManager
+import com.rementia.openwakeword.lib.model.WakeWordModel
 import java.io.IOException
+import kotlin.io.path.Path
 
 /**
  * Handles ONNX model loading and inference for wake word detection.
  */
 internal class OnnxModelRunner(
     private val assetManager: AssetManager,
-    private val modelPath: String
+    private val model: WakeWordModel
 ) : AutoCloseable {
 
     private val env: OrtEnvironment = OrtEnvironment.getEnvironment()
@@ -19,17 +21,27 @@ internal class OnnxModelRunner(
 
     private fun createSession(): OrtSession {
         return try {
-            assetManager.open(modelPath).use { inputStream ->
-                val modelBytes = inputStream.readBytes()
-
+                val modelBytes = loadModel(model)
                 val sessionOptions = OrtSession.SessionOptions()
                 sessionOptions.setInterOpNumThreads(1)
                 sessionOptions.setIntraOpNumThreads(1)
                 env.createSession(modelBytes, sessionOptions)
-            }
         } catch (e: IOException) {
-            throw RuntimeException("Failed to load model: $modelPath", e)
+            throw RuntimeException("Failed to load model: $model.modelPath", e)
         }
+    }
+
+    private fun loadModel(model: WakeWordModel): ByteArray {
+        if (model.builtIn) {
+            assetManager.open(model.modelPath).use { inputStream ->
+                return inputStream.readBytes()
+            }
+        } else {
+            val file = Path(model.modelPath).toFile()
+            return file.readBytes()
+        }
+
+        return byteArrayOf(0)
     }
 
     /**

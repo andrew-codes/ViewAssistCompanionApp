@@ -3,7 +3,7 @@ package com.rementia.openwakeword.lib.model
 /**
  * Represents a wake word detection event.
  * 
- * This data class is emitted through the [WakeWordEngine.detections] Flow whenever
+ * This data class is emitted through the WakeWordEngine.detections Flow whenever
  * a wake word is successfully detected. It contains all the information about the
  * detection event.
  * 
@@ -67,7 +67,6 @@ package com.rementia.openwakeword.lib.model
  * @constructor Creates a wake word detection event
  * 
  * @see WakeWordModel
- * @see WakeWordEngine
  */
 data class WakeWordDetection(
     val model: WakeWordModel,

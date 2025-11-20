@@ -303,7 +303,7 @@ class WakeWordEngine(
         model: WakeWordModel
     ) : AutoCloseable {
 
-        private val modelRunner = OnnxModelRunner(assetManager, model.modelPath)
+        private val modelRunner = OnnxModelRunner(assetManager, model)
 
         fun process(audioFeatures: Array<Array<FloatArray>>): Float {
             val score = modelRunner.predictWakeWord(audioFeatures)
