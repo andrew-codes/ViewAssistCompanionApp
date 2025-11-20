@@ -24,13 +24,14 @@ import android.os.StrictMode
 import android.provider.Settings
 import android.view.ViewGroup
 import android.widget.Toast
-import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.annotation.OptIn
+import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.app.AppCompatDelegate
 import androidx.camera.core.ExperimentalMirrorMode
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
@@ -45,10 +46,10 @@ import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.lifecycleScope
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import androidx.webkit.WebSettingsCompat
+import androidx.webkit.WebSettingsCompat.DARK_STRATEGY_PREFER_WEB_THEME_OVER_USER_AGENT_DARKENING
 import androidx.webkit.WebViewFeature
 import com.msp1974.vacompanion.ui.VAViewModel
 import com.msp1974.vacompanion.broadcasts.BroadcastSender
-import com.msp1974.vacompanion.service.CameraBackgroundTask.Companion.MOTION_INTERVAL
 import com.msp1974.vacompanion.service.VAForegroundService
 import com.msp1974.vacompanion.settings.APPConfig
 import com.msp1974.vacompanion.settings.BackgroundTaskStatus
@@ -79,7 +80,7 @@ import kotlin.time.Clock.System.now
 import kotlin.time.ExperimentalTime
 
 
-class MainActivity : ComponentActivity(), EventListener, ComponentCallbacks2 {
+class MainActivity : AppCompatActivity(), EventListener, ComponentCallbacks2 {
     val viewModel: VAViewModel by viewModels()
 
     private val log = Logger()
@@ -116,10 +117,6 @@ class MainActivity : ComponentActivity(), EventListener, ComponentCallbacks2 {
         screen = ScreenUtils(this)
         updater = Updater(this)
 
-        webView = CustomWebView.getView(this)
-        webViewClient = CustomWebViewClient(viewModel)
-        webView.webViewClient = webViewClient
-
         onBackPressedDispatcher.addCallback(this, onBackButton)
         setFirebaseUserProperties()
 
@@ -148,7 +145,7 @@ class MainActivity : ComponentActivity(), EventListener, ComponentCallbacks2 {
         screen.hideSystemUI(window)
         setContent {
             val vaUiState by viewModel.vacaState.collectAsState()
-            AppTheme(darkMode = vaUiState.darkMode, dynamicColor = false) {
+            AppTheme(darkMode = config.darkMode, dynamicColor = false) {
                 Surface(
                     modifier = Modifier
                         .fillMaxSize(),
@@ -194,14 +191,13 @@ class MainActivity : ComponentActivity(), EventListener, ComponentCallbacks2 {
     }
 
     fun initWebView() {
-        webView.apply {
-            initialise()
-            layoutParams = ViewGroup.LayoutParams(
+        webViewClient = CustomWebViewClient(viewModel)
+        webView = CustomWebView.getView(this)
+        webView.initialise(config, webViewClient)
+        webView.layoutParams = ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT
-            )
-        }
-        webViewClient.initialise(webView)
+        )
     }
 
     val onBackButton = object : OnBackPressedCallback(true) {
@@ -279,7 +275,7 @@ class MainActivity : ComponentActivity(), EventListener, ComponentCallbacks2 {
                     viewModel.setSatelliteRunning(true)
                     webView.setZoomLevel(config.zoomLevel)
                     config.screenOn = screen.isScreenOn()
-                    val url = AuthUtils.getURL(webViewClient.getHAUrl())
+                    val url = AuthUtils.getURL(AuthUtils.getHAUrl(config))
                     log.d("Loading URL: $url")
                     webView.loadUrl(url)
                 }
@@ -294,7 +290,7 @@ class MainActivity : ComponentActivity(), EventListener, ComponentCallbacks2 {
                 }
                 BroadcastSender.WEBVIEW_CRASH -> {
                     initWebView()
-                    val url = AuthUtils.getURL(webViewClient.getHAUrl())
+                    val url = AuthUtils.getURL(AuthUtils.getHAUrl(config))
                     log.d("Loading URL: $url")
                     webView.loadUrl(url)
                 }
@@ -395,7 +391,7 @@ class MainActivity : ComponentActivity(), EventListener, ComponentCallbacks2 {
             if (config.isRunning) {
                 viewModel.setSatelliteRunning(true)
                 webView.setZoomLevel(config.zoomLevel)
-                val url = AuthUtils.getURL(webViewClient.getHAUrl())
+                val url = AuthUtils.getURL(AuthUtils.getHAUrl(config))
                 log.d("Loading URL: $url")
                 webView.loadUrl(url)
             } else {
@@ -519,6 +515,12 @@ class MainActivity : ComponentActivity(), EventListener, ComponentCallbacks2 {
     fun setDarkMode(isDark: Boolean) {
         log.d("Setting dark mode: $isDark")
 
+        if (isDark) {
+            AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_YES)
+        } else{
+            AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_NO)
+        }
+
         // Set device dark mode
         val uiModeManager = getSystemService(UI_MODE_SERVICE) as UiModeManager
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -527,13 +529,7 @@ class MainActivity : ComponentActivity(), EventListener, ComponentCallbacks2 {
             uiModeManager.nightMode = if (isDark) UiModeManager.MODE_NIGHT_YES else UiModeManager.MODE_NIGHT_NO
         }
 
-        // Set webview dark mode if supported for older devices
-        if (WebViewFeature.isFeatureSupported(WebViewFeature.FORCE_DARK)) {
-            WebSettingsCompat.setForceDark(
-                webView.settings,
-                if (isDark) WebSettingsCompat.FORCE_DARK_ON else WebSettingsCompat.FORCE_DARK_OFF
-            )
-        }
+        webView.refreshDarkMode()
     }
 
     private fun hasPermissions(): Boolean {

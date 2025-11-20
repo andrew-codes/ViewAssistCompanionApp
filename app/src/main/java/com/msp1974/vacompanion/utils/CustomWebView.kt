@@ -3,10 +3,17 @@ package com.msp1974.vacompanion.utils
 import android.annotation.SuppressLint
 import kotlin.jvm.JvmOverloads
 import android.content.Context
+import android.content.res.Configuration
 import android.view.MotionEvent
 import android.content.res.Resources.NotFoundException
 import android.util.AttributeSet
 import android.webkit.*
+import androidx.webkit.WebSettingsCompat
+import androidx.webkit.WebSettingsCompat.DARK_STRATEGY_PREFER_WEB_THEME_OVER_USER_AGENT_DARKENING
+import androidx.webkit.WebViewFeature
+import com.msp1974.vacompanion.jsinterface.WebAppInterface
+import com.msp1974.vacompanion.jsinterface.WebViewJavascriptInterface
+import com.msp1974.vacompanion.settings.APPConfig
 
 @SuppressLint("SetJavaScriptEnabled", "ViewConstructor")
 class CustomWebView @JvmOverloads constructor(
@@ -14,6 +21,10 @@ class CustomWebView @JvmOverloads constructor(
     attrs: AttributeSet? = null,
     defStyleAttr: Int = 0,
 ) : WebView(context, attrs, defStyleAttr) {
+
+    lateinit private var customWebviewClient: CustomWebViewClient
+    lateinit private var config: APPConfig
+
 
     private val log = Logger()
     private var requestDisallow = false
@@ -24,8 +35,13 @@ class CustomWebView @JvmOverloads constructor(
         }
     }
 
-    fun initialise() {
+    fun initialise(config: APPConfig, customWebViewClient: CustomWebViewClient) {
         log.d("Initialising WebView")
+
+        this.config = config
+        this.customWebviewClient = customWebViewClient
+
+        webViewClient = customWebViewClient
         setFocusable(true)
         setFocusableInTouchMode(true)
 
@@ -45,7 +61,17 @@ class CustomWebView @JvmOverloads constructor(
             builtInZoomControls = false
             useWideViewPort = false
             loadWithOverviewMode = true
+            cacheMode = WebSettings.LOAD_DEFAULT
         }
+
+        // Add JS interfaces
+        addJavascriptInterface(androidInterface, "Android")
+        if (webViewClient::class == CustomWebViewClient::class) {
+            val webViewClientA = webViewClient as CustomWebViewClient
+            addJavascriptInterface(WebAppInterface(webViewClientA.config.uuid), "ViewAssistApp")
+            addJavascriptInterface(WebViewJavascriptInterface(this, AuthUtils(config).externalAuthCallback), "externalApp")
+        }
+
     }
 
     @SuppressLint("ClickableViewAccessibility")
@@ -57,6 +83,24 @@ class CustomWebView @JvmOverloads constructor(
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> requestDisallow = false
         }
         return super.onTouchEvent(event)
+    }
+
+    fun refreshDarkMode() {
+        val nightModeFlag = resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK
+        if (nightModeFlag == Configuration.UI_MODE_NIGHT_YES) {
+            if (WebViewFeature.isFeatureSupported(WebViewFeature.FORCE_DARK)) {
+                WebSettingsCompat.setForceDark(
+                    settings,
+                    WebSettingsCompat.FORCE_DARK_ON
+                )
+            }
+            if (WebViewFeature.isFeatureSupported(WebViewFeature.FORCE_DARK_STRATEGY)) {
+                WebSettingsCompat.setForceDarkStrategy(
+                    settings,
+                    DARK_STRATEGY_PREFER_WEB_THEME_OVER_USER_AGENT_DARKENING
+                )
+            }
+        }
     }
 
     fun setZoomLevel(level: Int) {

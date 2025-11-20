@@ -2,7 +2,11 @@ package com.msp1974.vacompanion.utils
 
 import android.annotation.SuppressLint
 import android.net.Uri
+import android.os.Handler
+import android.os.Looper
+import android.webkit.WebView
 import androidx.core.net.toUri
+import com.msp1974.vacompanion.jsinterface.ExternalAuthCallback
 import okhttp3.FormBody
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -10,17 +14,100 @@ import org.json.JSONObject
 import javax.net.ssl.SSLContext
 import javax.net.ssl.TrustManager
 import javax.net.ssl.X509TrustManager
-import javax.security.cert.X509Certificate
+import com.msp1974.vacompanion.settings.APPConfig
 import kotlin.random.Random
 
 data class AuthToken(val tokenType: String = "", val accessToken: String = "", val expires: Long = 0, val refreshToken: String = "")
 
-class AuthUtils {
+class AuthUtils(val config: APPConfig) {
+
+    // Add external auth callback for HA authentication
+    val externalAuthCallback = object : ExternalAuthCallback {
+        override fun onRequestExternalAuth(view: WebView) {
+            log.d("External auth callback in progress...")
+            if (config.refreshToken == "") {
+                log.d("No refresh token.  Proceeding to login screen")
+                loadUrl(getAuthUrl(getHAUrl(config)))
+                return
+            } else if (System.currentTimeMillis() > config.tokenExpiry && config.refreshToken != "") {
+                // Need to get new access token as it has expired
+                log.d("Auth token has expired.  Requesting new token using refresh token")
+                val success: Boolean = reAuthWithRefreshToken()
+                if (success) {
+                    log.d("Authorising with new token")
+                    callAuthJS(view)
+                } else {
+                    log.d("Failed to refresh auth token.  Proceeding to login screen")
+                    loadUrl(getAuthUrl(getHAUrl(config)))
+                }
+            } else if (config.accessToken != "") {
+                log.d("Auth token is still valid - authorising")
+                callAuthJS(view)
+            }
+        }
+
+        override fun onRequestRevokeExternalAuth(view: WebView) {
+            log.d("External auth revoke callback in progress...")
+            config.accessToken = ""
+            config.refreshToken = ""
+            config.tokenExpiry = 0
+            loadUrl(getAuthUrl(getHAUrl(config)))
+        }
+
+        private fun loadUrl(url: String) {
+            Handler(Looper.getMainLooper()).post({
+                loadUrl(url)
+            })
+        }
+
+        private fun callAuthJS(view: WebView) {
+            Handler(Looper.getMainLooper()).post({
+                view.evaluateJavascript(
+                    "window.externalAuthSetToken(true, {\n" +
+                            "\"access_token\": \"${config.accessToken}\",\n" +
+                            "\"expires_in\": 1800\n" +
+                            "});",
+                    null
+                )
+            })
+        }
+
+        private fun reAuthWithRefreshToken(): Boolean {
+            log.d("Auth token has expired.  Requesting new token using refresh token")
+            val auth = refreshAccessToken(
+                getHAUrl(config),
+                config.refreshToken,
+                !config.ignoreSSLErrors
+            )
+            if (auth.accessToken != "" && auth.expires > System.currentTimeMillis()) {
+                log.d("Received new auth token")
+                config.accessToken = auth.accessToken
+                config.tokenExpiry = auth.expires
+                return true
+            } else {
+                return false
+            }
+        }
+    }
 
     companion object {
         val log = Logger()
         const val CLIENT_URL = "vaca.homeassistant"
         var state: String = ""
+
+        fun getHAUrl(config: APPConfig): String {
+            var url = ""
+            if (config.homeAssistantURL == "") {
+                url = "http://${config.homeAssistantConnectedIP}:${config.homeAssistantHTTPPort}"
+            } else {
+                url = config.homeAssistantURL.removeSuffix("/")
+            }
+
+            if (config.homeAssistantDashboard != "") {
+                return url + "/" + config.homeAssistantDashboard.removePrefix("/")
+            }
+            return config.homeAssistantURL
+        }
 
         fun getURL(baseUrl: String): String {
             log.d("Getting URL for $baseUrl")

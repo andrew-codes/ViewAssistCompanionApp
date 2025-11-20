@@ -27,37 +27,8 @@ import java.net.URL
 class CustomWebViewClient(viewModel: VAViewModel): WebViewClientCompat()  {
     val log = Logger()
     private val firebase = FirebaseManager.getInstance()
-    private lateinit var view: WebView
-    private val config = viewModel.config!!
+    val config = viewModel.config!!
     private val resources = viewModel.resources!!
-
-    @SuppressLint("SetJavaScriptEnabled")
-    fun initialise(webView: WebView) {
-        view = webView
-        // Add javascript interface for view assist
-        view.addJavascriptInterface(WebAppInterface(config.uuid), "ViewAssistApp")
-        // Add JS interface for HA external auth support
-        view.addJavascriptInterface(
-            WebViewJavascriptInterface(externalAuthCallback),
-            "externalApp"
-        )
-
-        val nightModeFlag = resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK
-        if (nightModeFlag == Configuration.UI_MODE_NIGHT_YES) {
-            if (WebViewFeature.isFeatureSupported(WebViewFeature.FORCE_DARK)) {
-                WebSettingsCompat.setForceDark(
-                   view.settings,
-                    WebSettingsCompat.FORCE_DARK_ON
-                )
-            }
-            if (WebViewFeature.isFeatureSupported(WebViewFeature.FORCE_DARK_STRATEGY)) {
-                WebSettingsCompat.setForceDarkStrategy(
-                    view.settings,
-                    DARK_STRATEGY_PREFER_WEB_THEME_OVER_USER_AGENT_DARKENING
-                )
-            }
-        }
-    }
 
     override fun onRenderProcessGone(
         view: WebView,
@@ -79,20 +50,6 @@ class CustomWebViewClient(viewModel: VAViewModel): WebViewClientCompat()  {
         return true
     }
 
-    fun getHAUrl(): String {
-        var url = ""
-        if (config.homeAssistantURL == "") {
-            url = "http://${config.homeAssistantConnectedIP}:${config.homeAssistantHTTPPort}"
-        } else {
-            url = config.homeAssistantURL.removeSuffix("/")
-        }
-
-        if (config.homeAssistantDashboard != "") {
-            return url + "/" + config.homeAssistantDashboard.removePrefix("/")
-        }
-        return config.homeAssistantURL
-    }
-
     @Deprecated("Deprecated in Java")
     override fun shouldOverrideUrlLoading(view: WebView, url: String): Boolean {
         // If the url is our client id then capture the auth code and get an access token
@@ -100,16 +57,16 @@ class CustomWebViewClient(viewModel: VAViewModel): WebViewClientCompat()  {
             val authCode = AuthUtils.getReturnAuthCode(url)
             if (authCode != "") {
                 // Get access token using auth token
-                val auth = AuthUtils.authoriseWithAuthCode(getHAUrl(), authCode, !config.ignoreSSLErrors)
+                val auth = AuthUtils.authoriseWithAuthCode(AuthUtils.getHAUrl(config), authCode, !config.ignoreSSLErrors)
                 if (auth.accessToken == "") {
                     // Not authorised.  Send back to login screen
-                    view.loadUrl(AuthUtils.getAuthUrl(getHAUrl()))
+                    view.loadUrl(AuthUtils.getAuthUrl(AuthUtils.getHAUrl(config)))
                 } else {
                     // Authorised. Load HA default dashboard
                     config.accessToken = auth.accessToken
                     config.refreshToken = auth.refreshToken
                     config.tokenExpiry = auth.expires
-                    view.loadUrl(AuthUtils.getURL(getHAUrl()))
+                    view.loadUrl(AuthUtils.getURL(AuthUtils.getHAUrl(config)))
                 }
             }
         }
@@ -166,75 +123,6 @@ class CustomWebViewClient(viewModel: VAViewModel): WebViewClientCompat()  {
             }.create().show()
         } else {
             handler.proceed()
-        }
-    }
-
-    // Add external auth callback for HA authentication
-    val externalAuthCallback = object : ExternalAuthCallback {
-        override fun onRequestExternalAuth() {
-            log.d("External auth callback in progress...")
-            if (config.refreshToken == "") {
-                log.d("No refresh token.  Proceeding to login screen")
-                loadUrl(AuthUtils.getAuthUrl(getHAUrl()))
-                return
-            } else if (System.currentTimeMillis() > config.tokenExpiry && config.refreshToken != "") {
-                // Need to get new access token as it has expired
-                log.d("Auth token has expired.  Requesting new token using refresh token")
-                val success: Boolean = reAuthWithRefreshToken()
-                if (success) {
-                    log.d("Authorising with new token")
-                    callAuthJS()
-                } else {
-                    log.d("Failed to refresh auth token.  Proceeding to login screen")
-                    loadUrl(AuthUtils.getAuthUrl(getHAUrl()))
-                }
-            } else if (config.accessToken != "") {
-                log.d("Auth token is still valid - authorising")
-                callAuthJS()
-            }
-        }
-
-        override fun onRequestRevokeExternalAuth() {
-            log.d("External auth revoke callback in progress...")
-            config.accessToken = ""
-            config.refreshToken = ""
-            config.tokenExpiry = 0
-            loadUrl(AuthUtils.getAuthUrl(getHAUrl()))
-        }
-
-        private fun loadUrl(url: String) {
-            Handler(Looper.getMainLooper()).post({
-                view.loadUrl(url)
-            })
-        }
-
-        private fun callAuthJS() {
-            Handler(Looper.getMainLooper()).post({
-                view.evaluateJavascript(
-                    "window.externalAuthSetToken(true, {\n" +
-                            "\"access_token\": \"${config.accessToken}\",\n" +
-                            "\"expires_in\": 1800\n" +
-                            "});",
-                    null
-                )
-            })
-        }
-
-        private fun reAuthWithRefreshToken(): Boolean {
-            log.d("Auth token has expired.  Requesting new token using refresh token")
-            val auth = AuthUtils.refreshAccessToken(
-                getHAUrl(),
-                config.refreshToken,
-                !config.ignoreSSLErrors
-            )
-            if (auth.accessToken != "" && auth.expires > System.currentTimeMillis()) {
-                log.d("Received new auth token")
-                config.accessToken = auth.accessToken
-                config.tokenExpiry = auth.expires
-                return true
-            } else {
-                return false
-            }
         }
     }
 
