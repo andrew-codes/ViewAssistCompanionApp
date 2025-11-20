@@ -20,22 +20,15 @@ import com.google.firebase.crashlytics.crashlytics
 import com.msp1974.vacompanion.MainActivity
 import com.msp1974.vacompanion.R
 import com.msp1974.vacompanion.VACAApplication
-import com.msp1974.vacompanion.broadcasts.BroadcastSender
 import com.msp1974.vacompanion.settings.APPConfig
 import com.msp1974.vacompanion.settings.BackgroundTaskStatus
 import com.msp1974.vacompanion.utils.Logger
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.SupervisorJob
 import timber.log.Timber
 import java.util.Timer
 import java.util.TimerTask
-import kotlin.system.exitProcess
 
 
-class VABackgroundService : Service() {
-    private val log = Logger()
+class VAForegroundService : Service() {
     private lateinit var config: APPConfig
     private var wifiLock: WifiManager.WifiLock? = null
     private var keyguardLock: KeyguardManager.KeyguardLock? = null
@@ -53,7 +46,6 @@ class VABackgroundService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        log.e("OnCreate running")
         config = APPConfig.getInstance(this)
 
         // wifi lock
@@ -61,7 +53,7 @@ class VABackgroundService : Service() {
         wifiLock = wifiManager.createWifiLock(WifiManager.WIFI_MODE_FULL, "vacompanion.VABackgroundService:wifiLock")
         // Some Amazon devices are not seeing this permission so we are trying to check
         val permission = "android.permission.DISABLE_KEYGUARD"
-        val checkSelfPermission = ContextCompat.checkSelfPermission(this@VABackgroundService, permission)
+        val checkSelfPermission = ContextCompat.checkSelfPermission(this@VAForegroundService, permission)
         if (checkSelfPermission == PackageManager.PERMISSION_GRANTED) {
             val keyguardManager = getSystemService(KEYGUARD_SERVICE) as KeyguardManager
             keyguardLock = keyguardManager.newKeyguardLock("ALARM_KEYBOARD_LOCK_TAG")
@@ -74,9 +66,9 @@ class VABackgroundService : Service() {
     * */
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         var action = intent?.action ?: Actions.START.toString()
-        log.d("onStartCommand action: $action")
+        Timber.v("onStartCommand action: $action")
         if (intent == null) {
-            log.e("VACA restarted by OS after crash")
+            Timber.v("VACA restarted by OS after crash")
             startActivity(this)
             action = Actions.START.toString()
         }
@@ -106,9 +98,9 @@ class VABackgroundService : Service() {
                         )
                         .build()
 
-                log.d("Running in foreground ServiceCompat mode")
+                Timber.d("Running in foreground ServiceCompat mode")
                 ServiceCompat.startForeground(
-                    this@VABackgroundService,
+                    this@VAForegroundService,
                     1,
                     notification,
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
@@ -124,27 +116,27 @@ class VABackgroundService : Service() {
                 try {
                     keyguardLock?.disableKeyguard()
                 } catch (ex: Exception) {
-                    log.i("Disabling keyguard didn't work")
+                    Timber.i("Disabling keyguard didn't work")
                     ex.printStackTrace()
                     Firebase.crashlytics.recordException(ex)
                 }
                 backgroundTask = BackgroundTaskController(this)
                 backgroundTask?.start()
-                log.i("Background Service Started")
+                Timber.i("Background Service Started")
                 config.backgroundTaskRunning = true
                 config.backgroundTaskStatus = BackgroundTaskStatus.STARTED
 
                 // Launch Activity if not running on service start
                 // Can be caused by crash and service restarted by OS
                 if (config.currentActivity == "") {
-                    log.i("Launching MainActivity from foreground service")
+                    Timber.i("Launching MainActivity from foreground service")
                     Firebase.crashlytics.log("Launching MainActivity from foreground service")
                     val intent = Intent(this, MainActivity::class.java)
                     intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
                     try {
                         startActivity(intent)
                     } catch (ex: Exception) {
-                        log.e("Foreground service failed to launch activity - ${ex.message}")
+                        Timber.e("Foreground service failed to launch activity - ${ex.message}")
                     }
                 }
                 restartActivityWatchdog()
@@ -163,9 +155,9 @@ class VABackgroundService : Service() {
         try {
             val myIntent = Intent(context, MainActivity::class.java)
             myIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            applicationContext.startActivity(myIntent)
+            context.startActivity(myIntent)
         } catch (ex: Exception) {
-            log.e("Watchdog failed to restart activity - ${ex.message}")
+            Timber.e("Watchdog failed to restart activity - ${ex.message}")
         }
     }
 
@@ -173,15 +165,15 @@ class VABackgroundService : Service() {
         watchdogTimer.schedule(object: TimerTask() {
             override fun run() {
                 if (VACAApplication.activityManager.activity == null) {
-                    log.d("Watchdog detected activity not running.  Restarting...")
-                    startActivity(this@VABackgroundService)
+                    Timber.d("Watchdog detected activity not running.  Restarting...")
+                    startActivity(this@VAForegroundService)
                 }
             }
         },0,5000)
     }
 
     private fun stopServiceIntent(name: String): PendingIntent {
-        val intent = Intent(this, VABackgroundService::class.java)
+        val intent = Intent(this, VAForegroundService::class.java)
         intent.setAction(name)
         val pendingIntent = PendingIntent.getService(this, 0, intent, PendingIntent.FLAG_IMMUTABLE)
         return pendingIntent
@@ -193,7 +185,7 @@ class VABackgroundService : Service() {
     ) == PackageManager.PERMISSION_GRANTED
 
     override fun onDestroy() {
-        log.i("Stopping Background Service")
+        Timber.i("Stopping Background Service")
         watchdogTimer.cancel()
         backgroundTask?.shutdown()
         config.backgroundTaskRunning = false
@@ -206,7 +198,7 @@ class VABackgroundService : Service() {
         try {
             keyguardLock!!.reenableKeyguard()
         } catch (ex: Exception) {
-            log.i("Enabling keyguard didn't work")
+            Timber.i("Enabling keyguard didn't work")
             ex.printStackTrace()
             Firebase.crashlytics.recordException(ex)
         }

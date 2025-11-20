@@ -2,7 +2,6 @@ package com.msp1974.vacompanion
 
 import android.Manifest.permission
 import android.annotation.SuppressLint
-import android.app.Activity
 import android.app.AlertDialog
 import android.app.NotificationManager
 import android.app.UiModeManager
@@ -23,10 +22,7 @@ import android.os.Handler
 import android.os.Looper
 import android.os.StrictMode
 import android.provider.Settings
-import android.view.Display
-import android.view.MotionEvent
 import android.view.ViewGroup
-import android.view.WindowManager
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
@@ -34,6 +30,8 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.annotation.OptIn
+import androidx.camera.core.ExperimentalMirrorMode
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.collectAsState
@@ -44,12 +42,14 @@ import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.core.net.toUri
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.lifecycle.lifecycleScope
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import androidx.webkit.WebSettingsCompat
 import androidx.webkit.WebViewFeature
 import com.msp1974.vacompanion.ui.VAViewModel
 import com.msp1974.vacompanion.broadcasts.BroadcastSender
-import com.msp1974.vacompanion.service.VABackgroundService
+import com.msp1974.vacompanion.service.CameraBackgroundTask.Companion.MOTION_INTERVAL
+import com.msp1974.vacompanion.service.VAForegroundService
 import com.msp1974.vacompanion.settings.APPConfig
 import com.msp1974.vacompanion.settings.BackgroundTaskStatus
 import com.msp1974.vacompanion.ui.VADialog
@@ -69,8 +69,14 @@ import com.msp1974.vacompanion.utils.Helpers
 import com.msp1974.vacompanion.utils.Logger
 import com.msp1974.vacompanion.utils.ScreenUtils
 import com.msp1974.vacompanion.utils.Updater
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeout
+import timber.log.Timber
 import kotlin.concurrent.thread
 import kotlin.getValue
+import kotlin.time.Clock.System.now
+import kotlin.time.ExperimentalTime
 
 
 class MainActivity : ComponentActivity(), EventListener, ComponentCallbacks2 {
@@ -92,10 +98,7 @@ class MainActivity : ComponentActivity(), EventListener, ComponentCallbacks2 {
     private var tempScreenTimeout: Int = 0
     private var hasNetwork: Boolean = false
 
-    val dndPermissionsUnSupportedDevices = listOf("LenovoCD-24502F") //, "Google iot_msm8x53_som")
-
-
-
+    @OptIn(ExperimentalMirrorMode::class)
     @SuppressLint("HardwareIds", "SetTextI18n")
     override fun onCreate(savedInstanceState: Bundle?) {
 
@@ -131,6 +134,7 @@ class MainActivity : ComponentActivity(), EventListener, ComponentCallbacks2 {
 
         val policy = StrictMode.ThreadPolicy.Builder().permitAll().build()
         StrictMode.setThreadPolicy(policy)
+        Thread.setDefaultUncaughtExceptionHandler(AppExceptionHandler(this))
 
         setStatus(getString(R.string.status_initialising))
         keepSplashScreen = false
@@ -142,8 +146,6 @@ class MainActivity : ComponentActivity(), EventListener, ComponentCallbacks2 {
 
         // Hide system bars
         screen.hideSystemUI(window)
-
-
         setContent {
             val vaUiState by viewModel.vacaState.collectAsState()
             AppTheme(darkMode = vaUiState.darkMode, dynamicColor = false) {
@@ -265,6 +267,7 @@ class MainActivity : ComponentActivity(), EventListener, ComponentCallbacks2 {
 
         // Start background tasks
         runBackgroundTasks()
+
         initialised = true
     }
 
@@ -274,7 +277,7 @@ class MainActivity : ComponentActivity(), EventListener, ComponentCallbacks2 {
             when (intent.action) {
                 BroadcastSender.SATELLITE_STARTED -> {
                     viewModel.setSatelliteRunning(true)
-                    setZoomLevel(config.zoomLevel)
+                    webView.setZoomLevel(config.zoomLevel)
                     config.screenOn = screen.isScreenOn()
                     val url = AuthUtils.getURL(webViewClient.getHAUrl())
                     log.d("Loading URL: $url")
@@ -373,7 +376,7 @@ class MainActivity : ComponentActivity(), EventListener, ComponentCallbacks2 {
             runBackgroundTasks()
         }
         screen.hideSystemUI(window)
-        setScreenAlwaysOn(config.screenAlwaysOn)
+        screen.setScreenAlwaysOn(window, config.screenAlwaysOn)
     }
 
     override fun onDestroy() {
@@ -381,6 +384,7 @@ class MainActivity : ComponentActivity(), EventListener, ComponentCallbacks2 {
         screen.setScreenTimeout(screenTimeout)
         config.eventBroadcaster.removeListener(this)
         LocalBroadcastManager.getInstance(this).unregisterReceiver(satelliteBroadcastReceiver)
+        unregisterReceiver(satelliteBroadcastReceiver)
         super.onDestroy()
     }
 
@@ -390,7 +394,7 @@ class MainActivity : ComponentActivity(), EventListener, ComponentCallbacks2 {
             firebase.logEvent(FirebaseManager.MAIN_ACTIVITY_BACKGROUND_TASK_ALREADY_RUNNING, mapOf())
             if (config.isRunning) {
                 viewModel.setSatelliteRunning(true)
-                setZoomLevel(config.zoomLevel)
+                webView.setZoomLevel(config.zoomLevel)
                 val url = AuthUtils.getURL(webViewClient.getHAUrl())
                 log.d("Loading URL: $url")
                 webView.loadUrl(url)
@@ -410,8 +414,8 @@ class MainActivity : ComponentActivity(), EventListener, ComponentCallbacks2 {
         log.d("Starting background tasks")
         setStatus(getString(R.string.status_waiting_for_connection))
         try {
-            Intent(this.applicationContext, VABackgroundService::class.java).also {
-                it.action = VABackgroundService.Actions.START.toString()
+            Intent(this.applicationContext, VAForegroundService::class.java).also {
+                it.action = VAForegroundService.Actions.START.toString()
                 startService(it)
             }
         } catch (ex: Exception) {
@@ -430,14 +434,16 @@ class MainActivity : ComponentActivity(), EventListener, ComponentCallbacks2 {
 
         when (event.eventName) {
             "refresh" -> runOnUiThread { webView.reload() }
-            "zoomLevel" -> runOnUiThread { setZoomLevel(event.newValue as Int) }
+            "zoomLevel" -> runOnUiThread { webView.setZoomLevel(event.newValue as Int) }
             "darkMode" -> runOnUiThread { setDarkMode(event.newValue as Boolean) }
-            "screenAlwaysOn" -> runOnUiThread { setScreenAlwaysOn(event.newValue as Boolean, true) }
-            "screenAutoBrightness" -> runOnUiThread { setScreenAutoBrightness(event.newValue as Boolean) }
-            "screenBrightness" -> runOnUiThread { setScreenBrightness(event.newValue as Float) }
+            "screenAlwaysOn" -> runOnUiThread { screen.setScreenAlwaysOn(window, event.newValue as Boolean, true) }
+            "screenAutoBrightness" -> runOnUiThread { screen.setScreenAutoBrightness(window, event.newValue as Boolean) }
+            "screenBrightness" -> runOnUiThread { screen.setScreenBrightness(window, event.newValue as Float) }
             "screenWake" -> runOnUiThread { screenWake() }
             "screenSleep" -> runOnUiThread { screenSleep() }
             "deviceBump" -> runOnUiThread { if (config.screenOnBump) screenWake() }
+            "proximity" -> runOnUiThread { if (config.screenOnProximity && event.newValue as Float > 0) screenWake() }
+            "motion" -> runOnUiThread { onMotion() }
             "showToastMessage" -> runOnUiThread { Toast.makeText(this, event.newValue as String, Toast.LENGTH_SHORT).show() }
             else -> consumed = false
         }
@@ -446,25 +452,30 @@ class MainActivity : ComponentActivity(), EventListener, ComponentCallbacks2 {
         }
     }
 
+    @kotlin.OptIn(ExperimentalTime::class)
+    fun onMotion() {
+        config.lastMotion = now().epochSeconds
+        if (config.screenOnMotion) screenWake()
+    }
+
     fun screenWake(blackOut: Boolean = false) {
         if (!blackOut) viewModel.setScreenOn(true)
-        setScreenAlwaysOn(config.screenAlwaysOn, false)
-        setScreenAutoBrightness(config.screenAutoBrightness)
-        setScreenBrightness(config.screenBrightness)
+        screen.setScreenAlwaysOn(window, config.screenAlwaysOn, false)
+        screen.setScreenAutoBrightness(window, config.screenAutoBrightness)
+        screen.setScreenBrightness(window, config.screenBrightness)
         screen.wakeScreen()
-        if (screen.canWriteScreenSetting()) {
+        config.screenOn = true
+        if (tempScreenTimeout != 0 && screen.canWriteScreenSetting()) {
             screen.setScreenTimeout(screenTimeout)
             tempScreenTimeout = 0
-        } else {
-            config.screenOn = true
         }
     }
 
     fun screenSleep() {
         viewModel.setScreenOn(false)
-        setScreenAlwaysOn(false)
-        setScreenAutoBrightness(false)
-        setScreenBrightness(0.01f)
+        screen.setScreenAlwaysOn(window, false)
+        screen.setScreenAutoBrightness(window, false)
+        screen.setScreenBrightness(window, 0.01f)
         screen.setPartialWakeLock()
         if (screen.canWriteScreenSetting()) {
             if (tempScreenTimeout == 0) {
@@ -472,48 +483,38 @@ class MainActivity : ComponentActivity(), EventListener, ComponentCallbacks2 {
                 tempScreenTimeout = 1000
             }
             screen.setScreenTimeout(tempScreenTimeout)
-            Handler(Looper.getMainLooper()).postDelayed({
-                resetScreenParams()
-            }, 1000)
+            lifecycleScope.launch {
+                resetParamsOnScreenOff()
+            }
         } else {
             config.screenOn = false
         }
     }
 
-    private fun resetScreenParams() {
-        var isScreenOff = false
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            isScreenOff = display.state == Display.STATE_OFF
-        } else {
-            isScreenOff = windowManager.defaultDisplay.state == Display.STATE_OFF
+    suspend fun resetParamsOnScreenOff() {
+        try {
+            delay(1000)
+            withTimeout(15000) {
+                while (!screen.isScreenOff()) {
+                    delay(500)
+                }
+            }
+        } catch (ex: Exception) {
+            log.w("Timed out waiting for screen off")
         }
-
-        if (isScreenOff) {
+        config.screenOn = false
+        screen.setScreenTimeout(screenTimeout)
+        tempScreenTimeout = 0
+        if (screen.isScreenOff()) {
             log.d("Screen off")
             viewModel.setScreenOn(true)
-            screen.setScreenTimeout(screenTimeout)
-            setScreenAutoBrightness(config.screenAutoBrightness)
-            setScreenBrightness(config.screenBrightness)
-            tempScreenTimeout = 0
-        } else {
-            if (!viewModel.vacaState.value.screenOn) {
-                log.d("Waiting for screen off")
-                Handler(Looper.getMainLooper()).postDelayed({
-                    resetScreenParams()
-                }, 1000)
-            }
+            screen.setScreenAutoBrightness(window, config.screenAutoBrightness)
+            screen.setScreenBrightness(window, config.screenBrightness)
         }
     }
 
-    fun setZoomLevel(level: Int) {
-        if (level == 0) {
-            webView.settings.useWideViewPort = true
-        } else {
-            webView.settings.useWideViewPort = false
-            webView.setInitialScale(level)
-        }
 
-    }
+
 
     fun setDarkMode(isDark: Boolean) {
         log.d("Setting dark mode: $isDark")
@@ -535,49 +536,14 @@ class MainActivity : ComponentActivity(), EventListener, ComponentCallbacks2 {
         }
     }
 
-    fun setScreenBrightness(brightness: Float) {
-        try {
-            if (screen.canWriteScreenSetting()) {
-                screen.setScreenBrightness((brightness * 255).toInt())
-            } else {
-                val layout: WindowManager.LayoutParams? = this.window?.attributes
-                layout?.screenBrightness = brightness
-                this.window?.attributes = layout
-            }
-        } catch (e: Exception) {
-            firebase.logException(e)
-            e.printStackTrace()
-        }
-    }
-
-    fun setScreenAutoBrightness(state: Boolean) {
-        if (!state) {
-            screen.setDeviceBrightnessMode(false)
-            setScreenBrightness(config.screenBrightness)
-        } else {
-            screen.setDeviceBrightnessMode(true)
-        }
-    }
-
-    fun setScreenAlwaysOn(state: Boolean, turnScreenOn: Boolean = false) {
-        // wake lock
-        if (state) {
-            if (turnScreenOn && !screen.isScreenOn()) {
-                screen.wakeScreen()
-            }
-            window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-            window.addFlags(WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD)
-            window.addFlags(WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED)
-            window.decorView.keepScreenOn = true
-        } else {
-            window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-            window.decorView.keepScreenOn = false
-        }
-    }
-
     private fun hasPermissions(): Boolean {
-        val result: Boolean = config.hasRecordAudioPermission && config.hasPostNotificationPermission
-        return result
+        if (config.hasRecordAudioPermission) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                return config.hasPostNotificationPermission
+            }
+            return true
+        }
+        return false
     }
 
     private fun checkAndRequestPermissions() {
@@ -589,24 +555,37 @@ class MainActivity : ComponentActivity(), EventListener, ComponentCallbacks2 {
         if (ContextCompat.checkSelfPermission(this, permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
             requiredPermissions += permission.RECORD_AUDIO
             requestID += RECORD_AUDIO_PERMISSIONS_REQUEST
-            config.hasRecordAudioPermission = false
+        } else {
+            config.hasRecordAudioPermission = true
+        }
+
+        if (DeviceCapabilitiesManager(this).hasFrontCamera()) {
+            if (ContextCompat.checkSelfPermission(this, permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+                requiredPermissions += permission.CAMERA
+                requestID += CAMERA_PERMISSIONS_REQUEST
+            } else {
+                config.hasCameraPermission = true
+            }
         }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             if (ContextCompat.checkSelfPermission(this, permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
                 requiredPermissions += permission.POST_NOTIFICATIONS
                 requestID += NOTIFICATION_PERMISSIONS_REQUEST
-                config.hasPostNotificationPermission = false
+            } else {
+                config.hasPostNotificationPermission = true
             }
         }
-
+        /*
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
             if (ContextCompat.checkSelfPermission(this, permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
                 requiredPermissions += permission.WRITE_EXTERNAL_STORAGE
                 requestID += WRITE_EXTERNAL_STORAGE_PERMISSIONS_REQUEST
-                config.hasWriteExternalStoragePermission = false
+            } else {
+                config.hasWriteExternalStoragePermission = true
             }
         }
+        */
 
         if (requiredPermissions.isNotEmpty()) {
             log.d("Requesting main permissions")
@@ -641,6 +620,10 @@ class MainActivity : ComponentActivity(), EventListener, ComponentCallbacks2 {
                     log.d("Permission granted: ${permissions[i]}")
                     config.hasWriteExternalStoragePermission = true
                 }
+                if (permissions[i] == permission.CAMERA && grantResults[i] == PackageManager.PERMISSION_GRANTED) {
+                    log.d("Permission granted: ${permissions[i]}")
+                    config.hasCameraPermission = true
+                }
             }
         }
         if (hasPermissions()) {
@@ -660,6 +643,7 @@ class MainActivity : ComponentActivity(), EventListener, ComponentCallbacks2 {
 
     companion object {
         private const val RECORD_AUDIO_PERMISSIONS_REQUEST = 200
+        private const val CAMERA_PERMISSIONS_REQUEST = 250
         private const val NOTIFICATION_PERMISSIONS_REQUEST = 300
         private const val WRITE_EXTERNAL_STORAGE_PERMISSIONS_REQUEST = 400
     }
@@ -722,6 +706,7 @@ class MainActivity : ComponentActivity(), EventListener, ComponentCallbacks2 {
             }.create().show()
         } else {
             log.d("Notification access policy permission already granted or not supported")
+            config.hasPostNotificationPermission = true
             initialise()
         }
     }

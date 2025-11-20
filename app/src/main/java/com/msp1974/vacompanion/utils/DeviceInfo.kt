@@ -96,6 +96,12 @@ class DeviceCapabilitiesManager(val context: Context) {
         return deviceSensors.isNotEmpty()
     }
 
+    fun hasSensorType(sensorType: Int): Boolean {
+        val sensorManager: SensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
+        val deviceSensors = sensorManager.getSensorList(sensorType)
+        return deviceSensors.isNotEmpty()
+    }
+
     fun hasFrontCamera(): Boolean {
         val cameraManager = context.getSystemService(Context.CAMERA_SERVICE) as CameraManager
         try {

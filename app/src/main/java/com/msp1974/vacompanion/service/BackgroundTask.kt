@@ -5,8 +5,6 @@ import android.content.Context
 import android.content.Context.NOTIFICATION_SERVICE
 import android.content.res.AssetManager
 import android.media.AudioManager
-import android.os.Handler
-import android.os.Looper
 import com.msp1974.vacompanion.wyoming.Zeroconf
 import com.msp1974.vacompanion.audio.AudioDSP
 import com.msp1974.vacompanion.audio.AudioManager as AudManager
@@ -61,7 +59,7 @@ internal class BackgroundTaskController (private val context: Context): EventLis
     lateinit var assetManager: AssetManager
     lateinit var server: WyomingTCPServer
 
-    
+    private var motionTask = CameraBackgroundTask(context)
 
     fun start() {
         assetManager = context.assets
@@ -166,6 +164,24 @@ internal class BackgroundTaskController (private val context: Context): EventLis
                     }
                 )
             }
+            "lastMotion" -> {
+                server.sendStatus(
+                    buildJsonObject {
+                        putJsonObject("sensors", {
+                            put("last_motion", config.lastMotion)
+                        })
+                    }
+                )
+            }
+            "lastActivity" -> {
+                server.sendStatus(
+                    buildJsonObject {
+                        putJsonObject("sensors", {
+                            put("last_activity", config.lastActivity)
+                        })
+                    }
+                )
+            }
             else -> consumed = false
         }
         if (consumed) {
@@ -191,10 +207,17 @@ internal class BackgroundTaskController (private val context: Context): EventLis
                 server.sendStatus(data)
             }
         })
+        // Start motion sensor
+        if (config.screenOnMotion) {
+            motionTask.startCamera()
+        }
     }
 
     fun stopSensors() {
         sensorRunner?.stop()
+        if (config.screenOnMotion) {
+            motionTask.stopCamera()
+        }
     }
 
     fun startInputAudio() {
@@ -248,6 +271,7 @@ internal class BackgroundTaskController (private val context: Context): EventLis
         Timber.i("Shutting down")
         config.eventBroadcaster.removeListener(this)
         zeroConf.unregisterService()
+        motionTask.stopCamera()
         stopInputAudio()
         stopOpenWakeWordDetection()
         stopSensors()

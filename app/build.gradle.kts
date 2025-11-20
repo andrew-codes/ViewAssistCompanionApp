@@ -15,7 +15,7 @@ android {
         minSdk = 26
         targetSdk = 36
         versionCode = 1
-        versionName = "0.7.0"
+        versionName = "0.8.0-beta1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -28,12 +28,16 @@ android {
                     output.outputFileName = apkName
                 }
         }
+        debug {
+            isMinifyEnabled = false
+        }
         release {
             isMinifyEnabled = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            signingConfig = signingConfigs.getByName("debug")
         }
     }
     compileOptions {
@@ -41,6 +45,7 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 }
+
 
 dependencies {
 
@@ -66,6 +71,11 @@ dependencies {
     implementation ("com.squareup.okhttp3:okhttp:5.1.0")
     implementation (libs.androidx.webkit)
     implementation(libs.kotlinx.serialization.json)
+    implementation(libs.androidx.camera.core)
+    implementation(libs.androidx.camera.compose)
+    implementation(libs.androidx.camera.lifecycle)
+    implementation(libs.androidx.camera.camera2)
+    implementation(libs.accompanist.permissions)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

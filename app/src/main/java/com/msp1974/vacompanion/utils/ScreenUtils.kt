@@ -5,38 +5,68 @@ import android.content.ContextWrapper
 import android.os.Build
 import android.os.PowerManager
 import android.provider.Settings
+import android.view.Display
 import android.view.View
 import android.view.Window
+import android.view.WindowManager
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import androidx.lifecycle.lifecycleScope
 import com.google.firebase.Firebase
 import com.google.firebase.crashlytics.crashlytics
 import com.msp1974.vacompanion.settings.APPConfig
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeout
 
 
 class ScreenUtils(val context: Context) : ContextWrapper(context) {
     var log = Logger()
     var config = APPConfig.getInstance(context)
     private var wakeLock: PowerManager.WakeLock? = null
-    private var screenTimeout: Int = 30000
 
-    fun setScreenBrightness(
-        screenBrightnessValue: Int
-    ) {   // Change the screen brightness change mode to manual.
+    fun setScreenBrightness(window: Window, brightness: Float) {
         try {
             if (canWriteScreenSetting()) {
-                // Apply the screen brightness value to the system, this will change
-                // the value in Settings ---> Display ---> Brightness level.
-                // It will also change the screen brightness for the device.
                 Settings.System.putInt(
                     contentResolver,
                     Settings.System.SCREEN_BRIGHTNESS,
-                    screenBrightnessValue
+                    (brightness * 255).toInt()
                 )
+            } else {
+                val layout: WindowManager.LayoutParams? =  window.attributes
+                layout?.screenBrightness = brightness
+                window.attributes = layout
             }
         } catch (e: Exception) {
-            e.printStackTrace()
+            log.e("Error setting screen brightness: $e")
+            Firebase.crashlytics.recordException(e)
+        }
+    }
+
+    fun setScreenAutoBrightness(window: Window, state: Boolean) {
+        if (!state) {
+            setDeviceBrightnessMode(false)
+            setScreenBrightness(window, config.screenBrightness)
+        } else {
+            setDeviceBrightnessMode(true)
+        }
+    }
+
+    fun setScreenAlwaysOn(window: Window, state: Boolean, turnScreenOn: Boolean = false) {
+        // wake lock
+        if (state) {
+            if (turnScreenOn && !isScreenOn()) {
+                wakeScreen()
+            }
+            window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            window.addFlags(WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD)
+            window.addFlags(WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED)
+            window.decorView.keepScreenOn = true
+        } else {
+            window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            window.decorView.keepScreenOn = false
         }
     }
 
@@ -79,7 +109,7 @@ class ScreenUtils(val context: Context) : ContextWrapper(context) {
         }
     }
 
-    fun wakeScreen() {
+    fun wakeScreen(lockDuration: Long = 1000) {
         log.d("Acquiring screen on wake lock")
         if (wakeLock != null && wakeLock!!.isHeld) {
             wakeLock!!.release()
@@ -89,7 +119,7 @@ class ScreenUtils(val context: Context) : ContextWrapper(context) {
             PowerManager.SCREEN_BRIGHT_WAKE_LOCK or PowerManager.ACQUIRE_CAUSES_WAKEUP or PowerManager.ON_AFTER_RELEASE,
             "vacompanion.ScreenUtils:wakeLock"
         )
-        wakeLock?.acquire(1000)
+        wakeLock?.acquire(lockDuration)
     }
 
     fun setPartialWakeLock() {
@@ -111,6 +141,15 @@ class ScreenUtils(val context: Context) : ContextWrapper(context) {
     fun isScreenOn(): Boolean {
         val pm = getSystemService(POWER_SERVICE) as PowerManager
         return pm.isInteractive
+    }
+
+    fun isScreenOff(): Boolean {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            return display.state == Display.STATE_OFF
+        } else {
+            val wm = context.getSystemService(WINDOW_SERVICE) as WindowManager
+            return wm.defaultDisplay.state == Display.STATE_OFF
+        }
     }
 
     fun getScreenTimeout(): Int {

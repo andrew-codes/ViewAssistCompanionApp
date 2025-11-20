@@ -51,7 +51,7 @@ class Sensors(val context: Context, val cbFunc: SensorUpdatesCallback) {
                         lastAccel = currAccel.clone()
                         for (i in 0..2) {
                             val diff = currAccel[i] - prevAccel[i]
-                            if (abs(prevAccel[i]) > 0 && abs(diff) > 0.1) {
+                            if (abs(prevAccel[i]) > 0 && abs(diff) > 0.10) {
                                 log.i("Device bump detected -> $i: ${abs(diff)}")
                                 lastBump = System.currentTimeMillis()
                                 config.eventBroadcaster.notifyEvent(Event("deviceBump", "", ""))
@@ -60,8 +60,7 @@ class Sensors(val context: Context, val cbFunc: SensorUpdatesCallback) {
                     }
                 }
                 Sensor.TYPE_PROXIMITY -> {
-                    log.i("Proximity changed -> ${event.values[0]}")
-                    config.eventBroadcaster.notifyEvent(Event("deviceBump", "", ""))
+                    config.eventBroadcaster.notifyEvent(Event("proximity", "", event.values[0]))
                 }
                 else -> {
                     log.d("Sensor changed - ${event.sensor.type} -> ${event.values}")

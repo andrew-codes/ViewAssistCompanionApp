@@ -65,9 +65,10 @@ class APPConfig(val context: Context) {
     var backgroundTaskStatus: BackgroundTaskStatus = BackgroundTaskStatus.NOT_STARTED
     var isRunning: Boolean = false
 
-    var hasRecordAudioPermission: Boolean = true
-    var hasPostNotificationPermission: Boolean = true
-    var hasWriteExternalStoragePermission: Boolean = true
+    var hasRecordAudioPermission: Boolean = false
+    var hasPostNotificationPermission: Boolean = false
+    var hasWriteExternalStoragePermission: Boolean = false
+    var hasCameraPermission: Boolean = false
 
     var ignoreSSLErrors: Boolean = alwaysIgnoreSSLErrors
 
@@ -153,6 +154,14 @@ class APPConfig(val context: Context) {
         onValueChangedListener(property, oldValue, newValue)
     }
 
+    var screenOnProximity: Boolean by Delegates.observable(false) { property, oldValue, newValue ->
+        onValueChangedListener(property, oldValue, newValue)
+    }
+
+    var screenOnMotion: Boolean by Delegates.observable(true) { property, oldValue, newValue ->
+        onValueChangedListener(property, oldValue, newValue)
+    }
+
     var screenOn: Boolean by Delegates.observable(false) { property, oldValue, newValue ->
         onValueChangedListener(property, oldValue, newValue)
     }
@@ -165,9 +174,13 @@ class APPConfig(val context: Context) {
         onValueChangedListener(property, oldValue, newValue)
     }
 
+    var lastMotion: Long by Delegates.observable(0) { property, oldValue, newValue ->
+        onValueChangedListener(property, oldValue, newValue)
+    }
 
-
-
+    var lastActivity: Long by Delegates.observable(0) { property, oldValue, newValue ->
+        onValueChangedListener(property, oldValue, newValue)
+    }
 
 
 
@@ -282,6 +295,12 @@ class APPConfig(val context: Context) {
         }
         if (settings.has("screen_on_bump")) {
             screenOnBump = settings.getBoolean("screen_on_bump")
+        }
+        if (settings.has("screen_on_proximity")) {
+            screenOnProximity = settings.getBoolean("screen_on_proximity")
+        }
+        if (settings.has("screen_on_motion")) {
+            screenOnMotion = settings.getBoolean("screen_on_motion")
         }
         if (settings.has("screen_on")) {
             screenOn = settings.getBoolean("screen_on")
