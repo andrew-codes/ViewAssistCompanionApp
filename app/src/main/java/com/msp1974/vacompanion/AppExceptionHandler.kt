@@ -17,11 +17,22 @@ package com.msp1974.vacompanion
  */
 
 import android.app.Activity
-import com.msp1974.vacompanion.utils.AuthUtils.Companion.log
+import android.app.AlarmManager
+import android.app.PendingIntent
+import android.content.Context
+import android.content.Intent
+import timber.log.Timber
 
 class AppExceptionHandler(private val activity: Activity) : Thread.UncaughtExceptionHandler {
     override fun uncaughtException(thread: Thread, ex: Throwable) {
-        log.e("Handling uncaught exception - ${ex.stackTrace.toString()}")
+        Timber.e("AppExceptionHandler: $ex")
+        val intent = Intent(activity, MainActivity::class.java)
+        intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP
+                or Intent.FLAG_ACTIVITY_CLEAR_TASK
+                or Intent.FLAG_ACTIVITY_NEW_TASK)
+        val pendingIntent = PendingIntent.getActivity(activity.applicationContext, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT)
+        val mgr = activity.applicationContext.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        mgr[AlarmManager.RTC, System.currentTimeMillis() + 1000] = pendingIntent
         activity.finish()
     }
 }
