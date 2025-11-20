@@ -5,11 +5,13 @@ import android.content.Context
 import android.content.Intent
 import com.msp1974.vacompanion.MainActivity
 import com.msp1974.vacompanion.settings.APPConfig
+import timber.log.Timber
 
 class BootUpReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
         if (Intent.ACTION_BOOT_COMPLETED == intent.action) {
+            Timber.i("Running start on boot")
             val config = APPConfig.getInstance(context)
             val startOnBoot = config.startOnBoot
             if (startOnBoot) {
