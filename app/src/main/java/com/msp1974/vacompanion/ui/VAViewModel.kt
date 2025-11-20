@@ -1,10 +1,7 @@
 package com.msp1974.vacompanion.ui
 
-import android.content.Context
 import android.content.res.Configuration
 import android.content.res.Resources
-import androidx.compose.material3.DrawerState
-import androidx.compose.material3.DrawerValue
 import androidx.lifecycle.ViewModel
 import com.msp1974.vacompanion.broadcasts.BroadcastSender
 import com.msp1974.vacompanion.service.AudioRouteOption
@@ -17,7 +14,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
-import kotlin.math.abs
 
 
 data class State(
@@ -46,8 +42,6 @@ class VAViewModel: ViewModel(), EventListener {
     val vacaState: StateFlow<State> = _vacaState.asStateFlow()
     var config: APPConfig? = null
     var resources: Resources? = null
-    var maxDetectionLevel: Float = 0f
-    var holdIterations: Int = 0
 
     init {
         _vacaState.value = State()
@@ -120,22 +114,9 @@ class VAViewModel: ViewModel(), EventListener {
                 val data = event.newValue as DiagnosticInfo
                 consumed = false  //Do not log event as very numerous
 
-                if (holdIterations > 40) {
-                    maxDetectionLevel = data.detectionLevel
-                    holdIterations = 0
-                }
-                if (data.detectionLevel > maxDetectionLevel) {
-                    maxDetectionLevel = data.detectionLevel
-                    holdIterations = 0
-                } else {
-                    ++holdIterations
-                }
-
                 _vacaState.update { currentState ->
                     currentState.copy(
-                        diagnosticInfo = data.copy(
-                            detectionLevel = maxDetectionLevel
-                        )
+                        diagnosticInfo = data
                     )
                 }
             }

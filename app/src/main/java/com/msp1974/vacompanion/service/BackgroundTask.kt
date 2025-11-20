@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Context.NOTIFICATION_SERVICE
 import android.content.res.AssetManager
 import android.media.AudioManager
+import androidx.lifecycle.viewModelScope
 import com.msp1974.vacompanion.wyoming.Zeroconf
 import com.msp1974.vacompanion.audio.AudioDSP
 import com.msp1974.vacompanion.audio.AudioManager as AudManager
@@ -29,6 +30,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -49,7 +51,8 @@ internal class BackgroundTaskController (private val context: Context): EventLis
     private var audioInJob: Job? = null
     private var wakeWordJob: Job? = null
     private var wakeWordEngine: WakeWordEngine? = null
-    private var detectionScoresJob: Job? = null
+    private var holdDetectionLevelJob: Job? = null
+    private var detectionScoreMonitorJob: Job? = null
     private var lastWakeWordDetectionScore = 0f
 
 
@@ -107,6 +110,7 @@ internal class BackgroundTaskController (private val context: Context): EventLis
                        startOpenWakeWordDetection()
                     }
                     audioRoute = AudioRouteOption.DETECT
+                    lastWakeWordDetectionScore = 0f
                 }
             }
         })
@@ -228,28 +232,25 @@ internal class BackgroundTaskController (private val context: Context): EventLis
             audioInJob = scope.launch {
                 audioRecorder.startRecording()
                     .collect { audioBuffer ->
+                        var audioLevel = 0f
                         when (audioRoute) {
                             AudioRouteOption.DETECT -> {
                                 if (wakeWordEngine != null) wakeWordEngine!!.processAudio(audioBuffer)
-                                if (config.diagnosticsEnabled) {
-                                    sendDiagnostics(
-                                        audioBuffer.max(),
-                                        lastWakeWordDetectionScore
-                                    )
-                                }
+                                audioLevel = audioBuffer.max()
                             }
                             AudioRouteOption.STREAM -> {
                                 val gAudioBuffer = audioDSP.autoGain(audioBuffer, config.micGain)
                                 val bAudioBuffer = audioDSP.floatArrayToByteBuffer(gAudioBuffer)
-                                if (config.diagnosticsEnabled) {
-                                    sendDiagnostics(
-                                        gAudioBuffer.max(),
-                                        lastWakeWordDetectionScore
-                                    )
-                                }
                                 server.sendAudio(bAudioBuffer)
+                                audioLevel = gAudioBuffer.max()
                             }
                             else -> {}
+                        }
+                        if (config.diagnosticsEnabled) {
+                            sendDiagnostics(
+                                audioLevel,
+                                lastWakeWordDetectionScore
+                            )
                         }
                     }
             }
@@ -293,9 +294,9 @@ internal class BackgroundTaskController (private val context: Context): EventLis
             val wakeWordInfo = wakeWords[config.wakeWord]!!
 
             val models = listOf(
-                WakeWordModel(wakeWordInfo.name, wakeWordInfo.fileName, threshold = config.wakeWordThreshold)
+                WakeWordModel(name = wakeWordInfo.name, modelPath = wakeWordInfo.fileName, builtIn = wakeWordInfo.builtIn, threshold = config.wakeWordThreshold)
             )
-            Timber.i("Starting wake word detection with params: ${models}")
+            Timber.i("Starting wake word detection with params: $models")
             wakeWordEngine = WakeWordEngine(
                 context = context,
                 models = models,
@@ -307,14 +308,6 @@ internal class BackgroundTaskController (private val context: Context): EventLis
 
             wakeWordJob = scope.launch {
                 wakeWordEngine?.detections?.collect { detection ->
-                    Timber.i("${detection.model.name} detected!")
-                    if (config.diagnosticsEnabled) {
-                        sendDiagnostics(
-                            0f,
-                            detection.score
-                        )
-                    }
-
                     Timber.i("${detection.model.name} wake word detected at ${detection.score}, theshold is ${config.wakeWordThreshold}")
                     firebase.logEvent(
                         FirebaseManager.WAKE_WORD_DETECTED, mapOf(
@@ -323,7 +316,6 @@ internal class BackgroundTaskController (private val context: Context): EventLis
                             "prediction" to detection.score.toString()
                         )
                     )
-
                     // if wake up on ww, send event
                     if (config.screenOnWakeWord) {
                         config.eventBroadcaster.notifyEvent(Event("screenWake", "", ""))
@@ -342,8 +334,25 @@ internal class BackgroundTaskController (private val context: Context): EventLis
                     BroadcastSender.sendBroadcast(context, BroadcastSender.WAKE_WORD_DETECTED)
                 }
             }
-            detectionScoresJob = scope.launch {
-                wakeWordEngine?.scores?.collect { score -> lastWakeWordDetectionScore = score.score }
+            detectionScoreMonitorJob = scope.launch {
+                wakeWordEngine?.scores?.collect { score ->
+                    holdLastDetectionLevel(score.score)
+                }
+            }
+        }
+    }
+
+    private fun holdLastDetectionLevel(detectionLevel: Float, duration: Long = 2000) {
+        if (detectionLevel > lastWakeWordDetectionScore) {
+            lastWakeWordDetectionScore = detectionLevel
+            if (holdDetectionLevelJob != null && holdDetectionLevelJob!!.isActive) {
+                holdDetectionLevelJob?.cancel()
+            }
+            holdDetectionLevelJob = scope.launch {
+                delay(duration)
+                if (audioRoute == AudioRouteOption.DETECT) {
+                    lastWakeWordDetectionScore = 0f
+                }
             }
         }
     }
@@ -361,13 +370,13 @@ internal class BackgroundTaskController (private val context: Context): EventLis
             wakeWordEngine?.release()
             wakeWordEngine = null
         }
-        if (wakeWordJob!!.isActive) {
+        if (wakeWordJob != null && wakeWordJob!!.isActive) {
             wakeWordJob?.cancel()
             wakeWordJob = null
         }
-        if (detectionScoresJob!!.isActive) {
-            detectionScoresJob?.cancel()
-            detectionScoresJob = null
+        if (detectionScoreMonitorJob != null && detectionScoreMonitorJob!!.isActive) {
+            detectionScoreMonitorJob?.cancel()
+            detectionScoreMonitorJob = null
         }
         Timber.d("Wake word detection stopped")
     }
