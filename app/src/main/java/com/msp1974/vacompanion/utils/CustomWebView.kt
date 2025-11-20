@@ -59,6 +59,16 @@ class CustomWebView @JvmOverloads constructor(
         return super.onTouchEvent(event)
     }
 
+    fun setZoomLevel(level: Int) {
+        if (level == 0) {
+            settings.useWideViewPort = true
+        } else {
+            settings.useWideViewPort = false
+            setInitialScale(level)
+        }
+
+    }
+
     companion object {
         fun getView(context: Context): CustomWebView {
             return try {
