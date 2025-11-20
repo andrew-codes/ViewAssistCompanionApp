@@ -49,6 +49,8 @@ internal class BackgroundTaskController (private val context: Context): EventLis
     private var audioInJob: Job? = null
     private var wakeWordJob: Job? = null
     private var wakeWordEngine: WakeWordEngine? = null
+    private var detectionScoresJob: Job? = null
+    private var lastWakeWordDetectionScore = 0f
 
 
     val zeroConf: Zeroconf = Zeroconf(context)
@@ -229,14 +231,20 @@ internal class BackgroundTaskController (private val context: Context): EventLis
                         when (audioRoute) {
                             AudioRouteOption.DETECT -> {
                                 if (wakeWordEngine != null) wakeWordEngine!!.processAudio(audioBuffer)
+                                if (config.diagnosticsEnabled) {
+                                    sendDiagnostics(
+                                        audioBuffer.max(),
+                                        lastWakeWordDetectionScore
+                                    )
+                                }
                             }
                             AudioRouteOption.STREAM -> {
                                 val gAudioBuffer = audioDSP.autoGain(audioBuffer, config.micGain)
                                 val bAudioBuffer = audioDSP.floatArrayToByteBuffer(gAudioBuffer)
                                 if (config.diagnosticsEnabled) {
                                     sendDiagnostics(
-                                        gAudioBuffer.max() / 32768f,
-                                        0f
+                                        gAudioBuffer.max(),
+                                        lastWakeWordDetectionScore
                                     )
                                 }
                                 server.sendAudio(bAudioBuffer)
@@ -334,6 +342,9 @@ internal class BackgroundTaskController (private val context: Context): EventLis
                     BroadcastSender.sendBroadcast(context, BroadcastSender.WAKE_WORD_DETECTED)
                 }
             }
+            detectionScoresJob = scope.launch {
+                wakeWordEngine?.scores?.collect { score -> lastWakeWordDetectionScore = score.score }
+            }
         }
     }
 
@@ -353,6 +364,10 @@ internal class BackgroundTaskController (private val context: Context): EventLis
         if (wakeWordJob!!.isActive) {
             wakeWordJob?.cancel()
             wakeWordJob = null
+        }
+        if (detectionScoresJob!!.isActive) {
+            detectionScoresJob?.cancel()
+            detectionScoresJob = null
         }
         Timber.d("Wake word detection stopped")
     }
