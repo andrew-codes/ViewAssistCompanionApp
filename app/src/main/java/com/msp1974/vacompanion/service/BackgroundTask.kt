@@ -19,6 +19,7 @@ import com.msp1974.vacompanion.utils.Event
 import com.msp1974.vacompanion.utils.EventListener
 import com.msp1974.vacompanion.utils.FirebaseManager
 import com.msp1974.vacompanion.utils.Helpers
+import com.msp1974.vacompanion.utils.ScreenUtils
 import com.msp1974.vacompanion.utils.WakeWords
 import com.msp1974.vacompanion.wyoming.WyomingCallback
 import com.msp1974.vacompanion.wyoming.WyomingTCPServer
@@ -76,7 +77,6 @@ internal class BackgroundTaskController (private val context: Context): EventLis
                 startSensors(context)
                 startOpenWakeWordDetection()
                 startInputAudio()
-                audioRoute = AudioRouteOption.DETECT
                 BroadcastSender.sendBroadcast(context, BroadcastSender.SATELLITE_STARTED)
                 zeroConf.unregisterService()
             }
@@ -88,9 +88,8 @@ internal class BackgroundTaskController (private val context: Context): EventLis
                     sensorRunner!!.stop()
                     sensorRunner = null
                 }
-                audioRoute = AudioRouteOption.NONE
-                stopInputAudio()
                 stopOpenWakeWordDetection()
+                stopInputAudio()
                 stopSensors()
                 zeroConf.registerService(config.serverPort)
             }
@@ -99,18 +98,18 @@ internal class BackgroundTaskController (private val context: Context): EventLis
                 Timber.i("Streaming audio to server")
                 if (audioRoute == AudioRouteOption.DETECT) {
                     stopOpenWakeWordDetection()
-                    audioRoute = AudioRouteOption.STREAM
                 }
+                audioRoute = AudioRouteOption.STREAM
             }
 
             override fun onReleaseInputAudioStream() {
                 Timber.i("Stopped streaming audio to server")
                 if (audioRoute == AudioRouteOption.STREAM) {
+                    audioRoute = AudioRouteOption.NONE
+                    lastWakeWordDetectionScore = 0f
                     scope.launch {
                        startOpenWakeWordDetection()
                     }
-                    audioRoute = AudioRouteOption.DETECT
-                    lastWakeWordDetectionScore = 0f
                 }
             }
         })
@@ -135,7 +134,7 @@ internal class BackgroundTaskController (private val context: Context): EventLis
                 setVolume(AudioManager.STREAM_MUSIC, event.newValue as Float)
             }
             "wakeWord" -> {
-                if (audioRoute != AudioRouteOption.NONE) {
+                scope.launch {
                     restartWakeWordDetection()
                 }
             }
@@ -169,6 +168,14 @@ internal class BackgroundTaskController (private val context: Context): EventLis
                         })
                     }
                 )
+            }
+            "enableMotionDetection" -> {
+                val state = event.newValue as Boolean
+                if (state) {
+                    motionTask.startCamera()
+                } else {
+                    motionTask.stopCamera()
+                }
             }
             "lastMotion" -> {
                 server.sendStatus(
@@ -214,16 +221,14 @@ internal class BackgroundTaskController (private val context: Context): EventLis
             }
         })
         // Start motion sensor
-        if (config.screenOnMotion) {
+        if (config.enableMotionDetection) {
             motionTask.startCamera()
         }
     }
 
     fun stopSensors() {
         sensorRunner?.stop()
-        if (config.screenOnMotion) {
-            motionTask.stopCamera()
-        }
+        motionTask.stopCamera()
     }
 
     fun startInputAudio() {
@@ -234,6 +239,9 @@ internal class BackgroundTaskController (private val context: Context): EventLis
                     .collect { audioBuffer ->
                         var audioLevel = 0f
                         when (audioRoute) {
+                            AudioRouteOption.NONE -> {
+                                audioLevel = audioBuffer.max()
+                            }
                             AudioRouteOption.DETECT -> {
                                 if (wakeWordEngine != null) wakeWordEngine!!.processAudio(audioBuffer)
                                 audioLevel = audioBuffer.max()
@@ -258,10 +266,11 @@ internal class BackgroundTaskController (private val context: Context): EventLis
     }
 
     fun stopInputAudio() {
-        //stopWakeWordDetection()
-        Timber.i("Stopping input audio")
-        audioInJob?.cancel()
-        audioInJob = null
+        if (audioInJob != null && audioInJob!!.isActive) {
+            Timber.i("Stopping input audio")
+            audioInJob?.cancel()
+            audioInJob = null
+        }
     }
 
     fun sendDiagnostics(audioLevel: Float, detectionLevel: Float) {
@@ -270,6 +279,7 @@ internal class BackgroundTaskController (private val context: Context): EventLis
             audioLevel = audioLevel * 100,
             detectionLevel = detectionLevel * 10,
             detectionThreshold = config.wakeWordThreshold * 10,
+            wakeWord = config.wakeWord,
             mode = audioRoute
         )
         val event = Event("diagnosticStats", "", data)
@@ -289,10 +299,14 @@ internal class BackgroundTaskController (private val context: Context): EventLis
     }
 
     private fun startOpenWakeWordDetection() {
+        if (config.wakeWord == "none") {
+            audioRoute = AudioRouteOption.NONE
+            return
+        }
+
         val wakeWords = WakeWords(context).getWakeWords()
         if (config.wakeWord in wakeWords.keys) {
             val wakeWordInfo = wakeWords[config.wakeWord]!!
-
             val models = listOf(
                 WakeWordModel(name = wakeWordInfo.name, modelPath = wakeWordInfo.fileName, builtIn = wakeWordInfo.builtIn, threshold = config.wakeWordThreshold)
             )
@@ -305,6 +319,7 @@ internal class BackgroundTaskController (private val context: Context): EventLis
                 scope = CoroutineScope(Dispatchers.Default)
             )
             Timber.i("Wake word detection started")
+            audioRoute = AudioRouteOption.DETECT
 
             wakeWordJob = scope.launch {
                 wakeWordEngine?.detections?.collect { detection ->
@@ -365,6 +380,9 @@ internal class BackgroundTaskController (private val context: Context): EventLis
 
 
     private fun stopOpenWakeWordDetection() {
+        Timber.i("Stopping wake word detection")
+        audioRoute = AudioRouteOption.NONE
+
         if (wakeWordEngine != null) {
             wakeWordEngine?.stop()
             wakeWordEngine?.release()

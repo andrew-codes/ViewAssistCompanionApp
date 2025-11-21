@@ -252,5 +252,6 @@ data class DiagnosticInfo(
     var detectionThreshold: Float = 0f,
     var detectionLevel: Float = 0f,
     var mode: AudioRouteOption = AudioRouteOption.NONE,
+    var wakeWord: String = "",
     var vadDetection: Boolean = false
 )

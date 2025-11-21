@@ -32,7 +32,6 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import timber.log.Timber
-import java.awt.font.NumericShaper
 import kotlin.math.absoluteValue
 
 
@@ -57,6 +56,9 @@ class CameraBackgroundTask(val context: Context) {
     private var settleDelayJob: Job? = null
     private var lastDetection: Long = 0
 
+    private var isRunning: Boolean = false
+
+
     init {
         detector.setLeniency(2)
     }
@@ -66,22 +68,36 @@ class CameraBackgroundTask(val context: Context) {
     }
 
     fun startCamera() {
-        initCam()
+        if (!isRunning) {
+            // Cant start camera if screen off so turn on and wait
+            scope.launch {
+                if (!config.screenOn) {
+                    config.eventBroadcaster.notifyEvent(Event("screenWakeBlackout", "", ""))
+                    delay(1000)
+                }
+                initCam()
+                isRunning = true
+            }
+        }
     }
 
     fun stopCamera() {
-        try {
-            captureSession?.close()
-            captureSession = null
+        if (isRunning) {
+            try {
+                captureSession?.close()
+                captureSession = null
 
-            cameraDevice?.close()
-            cameraDevice = null
+                cameraDevice?.close()
+                cameraDevice = null
 
-            imageReader?.close()
-            imageReader = null
+                imageReader?.close()
+                imageReader = null
 
-        } catch (e: Exception) {
-            e.printStackTrace()
+            } catch (e: Exception) {
+                Timber.e("Error closing camera: $e")
+            } finally {
+                isRunning = false
+            }
         }
     }
 
@@ -102,10 +118,6 @@ class CameraBackgroundTask(val context: Context) {
 
 
     private val imageListener = ImageReader.OnImageAvailableListener { reader ->
-
-        if (!config.screenOnMotion) {
-            stopCamera()
-        }
 
         val image = reader?.acquireLatestImage()
 

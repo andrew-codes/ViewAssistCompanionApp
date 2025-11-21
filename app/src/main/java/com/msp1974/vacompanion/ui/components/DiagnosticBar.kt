@@ -53,16 +53,19 @@ fun DiagnosticBar(
                 maxIndicatorValue = 100,
                 smallText = "Mic Level"
             )
-            InfoGauge(
-                indicatorValue = (diagnosticInfo.detectionLevel).toInt(),
-                maxIndicatorValue = 10,
-                smallText = "Detection",
-                foregroundIndicatorColor = if (diagnosticInfo.detectionLevel > diagnosticInfo.detectionThreshold) CustomColours.GREEN else CustomColours.AMBER
-            )
+            if (diagnosticInfo.wakeWord != "none") {
+                InfoGauge(
+                    indicatorValue = (diagnosticInfo.detectionLevel).toInt(),
+                    maxIndicatorValue = 10,
+                    smallText = "Detection",
+                    foregroundIndicatorColor = if (diagnosticInfo.detectionLevel > diagnosticInfo.detectionThreshold) CustomColours.GREEN else CustomColours.AMBER
+                )
+            }
             Column() {
                 AssistChip(
                     onClick = {},
                     label = { Text("Detecting") },
+                    enabled = diagnosticInfo.wakeWord != "none",
                     colors = AssistChipDefaults.assistChipColors(
                         containerColor = if (diagnosticInfo.mode == AudioRouteOption.DETECT) CustomColours.GREEN else Color.Transparent,
                         labelColor = MaterialTheme.colorScheme.onPrimaryContainer

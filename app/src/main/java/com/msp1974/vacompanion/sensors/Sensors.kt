@@ -85,13 +85,6 @@ class Sensors(val context: Context, val cbFunc: SensorUpdatesCallback) {
         registerSensorListener(sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER))
         registerSensorListener(sensorManager.getDefaultSensor(Sensor.TYPE_PROXIMITY))
 
-
-        for (sensor in sensorManager.getSensorList(Sensor.TYPE_ALL)) {
-            if (sensor.stringType == "com.qti.sensor.facing") {
-                registerSensorListener(sensor)
-            }
-        }
-
         startIntervalTimer()
     }
 

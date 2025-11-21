@@ -161,7 +161,7 @@ class WakeWordEngine(
                             Timber.d("Timeout processing model ${model.name} ->$e")
                             null
                         } catch (e: CancellationException) {
-                            Timber.d("Job cancelled processing model ${model.name} ->$e")
+                            //Timber.d("Job cancelled processing model ${model.name} ->$e")
                             null
                         } catch (e: Exception) {
                             Timber.e("Error processing model ${model.name} ->$e")

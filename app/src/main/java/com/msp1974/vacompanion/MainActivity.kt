@@ -45,9 +45,6 @@ import androidx.core.net.toUri
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.lifecycleScope
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
-import androidx.webkit.WebSettingsCompat
-import androidx.webkit.WebSettingsCompat.DARK_STRATEGY_PREFER_WEB_THEME_OVER_USER_AGENT_DARKENING
-import androidx.webkit.WebViewFeature
 import com.msp1974.vacompanion.ui.VAViewModel
 import com.msp1974.vacompanion.broadcasts.BroadcastSender
 import com.msp1974.vacompanion.service.VAForegroundService
@@ -74,10 +71,10 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
 import timber.log.Timber
+import java.time.Instant
+import java.time.format.DateTimeFormatter
 import kotlin.concurrent.thread
 import kotlin.getValue
-import kotlin.time.Clock.System.now
-import kotlin.time.ExperimentalTime
 
 
 class MainActivity : AppCompatActivity(), EventListener, ComponentCallbacks2 {
@@ -95,8 +92,6 @@ class MainActivity : AppCompatActivity(), EventListener, ComponentCallbacks2 {
     private var screenOrientation: Int = 0
     private var updateProcessComplete: Boolean = true
     private var initialised: Boolean = false
-    private var screenTimeout: Int = 30000
-    private var tempScreenTimeout: Int = 0
     private var hasNetwork: Boolean = false
 
     @OptIn(ExperimentalMirrorMode::class)
@@ -229,14 +224,6 @@ class MainActivity : AppCompatActivity(), EventListener, ComponentCallbacks2 {
             return
         }
 
-        // If we get in a mess with short screen timeout to turn off
-        // screen, set a decent timeout here.
-        screenTimeout = screen.getScreenTimeout()
-        if (screenTimeout < 15000) {
-            screenTimeout = 15000
-            screen.setScreenTimeout(screenTimeout)
-        }
-
         // Make volume keys adjust music stream
         volumeControlStream = AudioManager.STREAM_MUSIC
 
@@ -299,11 +286,6 @@ class MainActivity : AppCompatActivity(), EventListener, ComponentCallbacks2 {
                 }
                 Intent.ACTION_SCREEN_OFF -> {
                     config.screenOn = false
-                    // Set screenTimeout in case it changed and this is a dream sleep
-                    // not a forced sleep
-                    if (tempScreenTimeout == 0) {
-                        screenTimeout = screen.getScreenTimeout()
-                    }
                 }
             }
         }
@@ -377,7 +359,7 @@ class MainActivity : AppCompatActivity(), EventListener, ComponentCallbacks2 {
 
     override fun onDestroy() {
         log.d("Main Activity destroyed")
-        screen.setScreenTimeout(screenTimeout)
+        screen.setScreenTimeout(config.screenTimeout)
         config.eventBroadcaster.removeListener(this)
         LocalBroadcastManager.getInstance(this).unregisterReceiver(satelliteBroadcastReceiver)
         unregisterReceiver(satelliteBroadcastReceiver)
@@ -433,12 +415,14 @@ class MainActivity : AppCompatActivity(), EventListener, ComponentCallbacks2 {
             "zoomLevel" -> runOnUiThread { webView.setZoomLevel(event.newValue as Int) }
             "darkMode" -> runOnUiThread { setDarkMode(event.newValue as Boolean) }
             "screenAlwaysOn" -> runOnUiThread { screen.setScreenAlwaysOn(window, event.newValue as Boolean, true) }
+            "screenTimeout" -> runOnUiThread { screen.setScreenTimeout(config.screenTimeout) }
             "screenAutoBrightness" -> runOnUiThread { screen.setScreenAutoBrightness(window, event.newValue as Boolean) }
             "screenBrightness" -> runOnUiThread { screen.setScreenBrightness(window, event.newValue as Float) }
             "screenWake" -> runOnUiThread { screenWake() }
+            "screenWakeBlackout" -> runOnUiThread { screenWake(true) }
             "screenSleep" -> runOnUiThread { screenSleep() }
             "deviceBump" -> runOnUiThread { if (config.screenOnBump) screenWake() }
-            "proximity" -> runOnUiThread { if (config.screenOnProximity && event.newValue as Float > 0) screenWake() }
+            "proximity" -> runOnUiThread { if (config.screenOnProximity && event.newValue as Float == 0f) screenWake() }
             "motion" -> runOnUiThread { onMotion() }
             "showToastMessage" -> runOnUiThread { Toast.makeText(this, event.newValue as String, Toast.LENGTH_SHORT).show() }
             else -> consumed = false
@@ -448,9 +432,8 @@ class MainActivity : AppCompatActivity(), EventListener, ComponentCallbacks2 {
         }
     }
 
-    @kotlin.OptIn(ExperimentalTime::class)
     fun onMotion() {
-        config.lastMotion = now().epochSeconds
+        config.lastMotion = DateTimeFormatter.ISO_INSTANT.format(Instant.now())
         if (config.screenOnMotion) screenWake()
     }
 
@@ -461,10 +444,7 @@ class MainActivity : AppCompatActivity(), EventListener, ComponentCallbacks2 {
         screen.setScreenBrightness(window, config.screenBrightness)
         screen.wakeScreen()
         config.screenOn = true
-        if (tempScreenTimeout != 0 && screen.canWriteScreenSetting()) {
-            screen.setScreenTimeout(screenTimeout)
-            tempScreenTimeout = 0
-        }
+        screen.setScreenTimeout(config.screenTimeout)
     }
 
     fun screenSleep() {
@@ -474,20 +454,16 @@ class MainActivity : AppCompatActivity(), EventListener, ComponentCallbacks2 {
         screen.setScreenBrightness(window, 0.01f)
         screen.setPartialWakeLock()
         if (screen.canWriteScreenSetting()) {
-            if (tempScreenTimeout == 0) {
-                screenTimeout = screen.getScreenTimeout()
-                tempScreenTimeout = 1000
-            }
-            screen.setScreenTimeout(tempScreenTimeout)
+            screen.setScreenTimeout(1000)
             lifecycleScope.launch {
-                resetParamsOnScreenOff()
+                waitForScreenOff()
             }
         } else {
             config.screenOn = false
         }
     }
 
-    suspend fun resetParamsOnScreenOff() {
+    suspend fun waitForScreenOff() {
         try {
             delay(1000)
             withTimeout(15000) {
@@ -497,20 +473,10 @@ class MainActivity : AppCompatActivity(), EventListener, ComponentCallbacks2 {
             }
         } catch (ex: Exception) {
             log.w("Timed out waiting for screen off")
+            return
         }
-        config.screenOn = false
-        screen.setScreenTimeout(screenTimeout)
-        tempScreenTimeout = 0
-        if (screen.isScreenOff()) {
-            log.d("Screen off")
-            viewModel.setScreenOn(true)
-            screen.setScreenAutoBrightness(window, config.screenAutoBrightness)
-            screen.setScreenBrightness(window, config.screenBrightness)
-        }
+        log.d("Screen off")
     }
-
-
-
 
     fun setDarkMode(isDark: Boolean) {
         log.d("Setting dark mode: $isDark")

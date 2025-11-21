@@ -33,7 +33,8 @@ import java.io.DataOutputStream
 import java.net.Socket
 import java.net.SocketException
 import java.nio.charset.Charset
-import java.util.Date
+import java.time.Instant
+import java.time.format.DateTimeFormatter
 import java.util.Timer
 import java.util.TimerTask
 import kotlin.concurrent.thread
@@ -612,7 +613,7 @@ class ClientHandler(private val context: Context, private val server: WyomingTCP
             "detection",
             buildJsonObject {
                 put("name", config.wakeWord)
-                put("timestamp", Date().toString())
+                put("timestamp", DateTimeFormatter.ISO_INSTANT.format(Instant.now()))
                 put("speaker", "")
             }
         )
@@ -640,7 +641,7 @@ class ClientHandler(private val context: Context, private val server: WyomingTCP
         sendEvent(
             "audio-stop",
             buildJsonObject {
-                put("timestamp", Date().toString())
+                put("timestamp", DateTimeFormatter.ISO_INSTANT.format(Instant.now()))
             }
         )
     }
@@ -665,7 +666,7 @@ class ClientHandler(private val context: Context, private val server: WyomingTCP
         sendCustomEvent(
             "settings",
             buildJsonObject {
-            put("timestamp", Date().toString())
+            put("timestamp", DateTimeFormatter.ISO_INSTANT.format(Instant.now()))
             putJsonObject("settings") {
                 put(name, value)
             }
@@ -676,7 +677,7 @@ class ClientHandler(private val context: Context, private val server: WyomingTCP
         sendCustomEvent(
             "settings",
             buildJsonObject {
-                put("timestamp", Date().toString())
+                put("timestamp", DateTimeFormatter.ISO_INSTANT.format(Instant.now()))
                 putJsonObject("settings") {
                     put(name, value)
                 }
@@ -687,7 +688,7 @@ class ClientHandler(private val context: Context, private val server: WyomingTCP
         sendCustomEvent(
             "settings",
             buildJsonObject {
-                put("timestamp", Date().toString())
+                put("timestamp", DateTimeFormatter.ISO_INSTANT.format(Instant.now()))
                 putJsonObject("settings") {
                     put(name, value)
                 }

@@ -15,6 +15,7 @@ import android.os.Build
 import android.webkit.WebView
 import com.google.firebase.Firebase
 import com.google.firebase.crashlytics.crashlytics
+import com.msp1974.vacompanion.settings.APPConfig
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
@@ -39,6 +40,8 @@ data class DeviceCapabilitiesData(
 class DeviceCapabilitiesManager(val context: Context) {
 
     val log = Logger()
+    val config = APPConfig.getInstance(context)
+
 
     fun getDeviceInfo(): DeviceCapabilitiesData {
         return DeviceCapabilitiesData(

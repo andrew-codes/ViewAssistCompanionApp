@@ -170,15 +170,23 @@ class APPConfig(val context: Context) {
         onValueChangedListener(property, oldValue, newValue)
     }
 
+    var enableMotionDetection: Boolean by Delegates.observable(false) { property, oldValue, newValue ->
+        onValueChangedListener(property, oldValue, newValue)
+    }
+
     var currentPath: String by Delegates.observable("") { property, oldValue, newValue ->
         onValueChangedListener(property, oldValue, newValue)
     }
 
-    var lastMotion: Long by Delegates.observable(0) { property, oldValue, newValue ->
+    var lastMotion: String by Delegates.observable("") { property, oldValue, newValue ->
         onValueChangedListener(property, oldValue, newValue)
     }
 
     var lastActivity: Long by Delegates.observable(0) { property, oldValue, newValue ->
+        onValueChangedListener(property, oldValue, newValue)
+    }
+
+    var screenTimeout: Int by Delegates.observable(3000) { property, oldValue, newValue ->
         onValueChangedListener(property, oldValue, newValue)
     }
 
@@ -307,6 +315,12 @@ class APPConfig(val context: Context) {
         }
         if (settings.has("enable_network_recovery")) {
             enableNetworkRecovery = settings.getBoolean("enable_network_recovery")
+        }
+        if (settings.has("enable_motion_detection")) {
+            enableMotionDetection = settings.getBoolean("enable_motion_detection")
+        }
+        if (settings.has("screen_timeout")) {
+            screenTimeout = settings.getInt("screen_timeout") * 1000
         }
         Firebase.crashlytics.log("Settings update")
     }
