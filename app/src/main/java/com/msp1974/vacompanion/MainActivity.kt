@@ -538,7 +538,6 @@ class MainActivity : AppCompatActivity(), EventListener, ComponentCallbacks2 {
                 config.hasPostNotificationPermission = true
             }
         }
-        /*
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
             if (ContextCompat.checkSelfPermission(this, permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
                 requiredPermissions += permission.WRITE_EXTERNAL_STORAGE
@@ -547,7 +546,6 @@ class MainActivity : AppCompatActivity(), EventListener, ComponentCallbacks2 {
                 config.hasWriteExternalStoragePermission = true
             }
         }
-        */
 
         if (requiredPermissions.isNotEmpty()) {
             log.d("Requesting main permissions")
