@@ -27,7 +27,7 @@ class AuthUtils(val config: APPConfig) {
             log.d("External auth callback in progress...")
             if (config.refreshToken == "") {
                 log.d("No refresh token.  Proceeding to login screen")
-                loadUrl(getAuthUrl(getHAUrl(config)))
+                loadUrl(view, getAuthUrl(getHAUrl(config, withDashboardPath = false)), clearCache = true)
                 return
             } else if (System.currentTimeMillis() > config.tokenExpiry && config.refreshToken != "") {
                 // Need to get new access token as it has expired
@@ -38,7 +38,7 @@ class AuthUtils(val config: APPConfig) {
                     callAuthJS(view)
                 } else {
                     log.d("Failed to refresh auth token.  Proceeding to login screen")
-                    loadUrl(getAuthUrl(getHAUrl(config)))
+                    loadUrl(view, getAuthUrl(getHAUrl(config, withDashboardPath = false)), clearCache = true)
                 }
             } else if (config.accessToken != "") {
                 log.d("Auth token is still valid - authorising")
@@ -51,12 +51,16 @@ class AuthUtils(val config: APPConfig) {
             config.accessToken = ""
             config.refreshToken = ""
             config.tokenExpiry = 0
-            loadUrl(getAuthUrl(getHAUrl(config)))
+            loadUrl(view, getAuthUrl(getHAUrl(config)))
         }
 
-        private fun loadUrl(url: String) {
+        private fun loadUrl(view: WebView, url: String, clearCache: Boolean = false) {
+            log.d("Loading URL: $url")
             Handler(Looper.getMainLooper()).post({
-                loadUrl(url)
+                if (clearCache) {
+                    view.clearCache(true)
+                }
+                view.loadUrl(url)
             })
         }
 
@@ -95,7 +99,7 @@ class AuthUtils(val config: APPConfig) {
         const val CLIENT_URL = "vaca.homeassistant"
         var state: String = ""
 
-        fun getHAUrl(config: APPConfig): String {
+        fun getHAUrl(config: APPConfig, withDashboardPath: Boolean = true): String {
             var url = ""
             if (config.homeAssistantURL == "") {
                 url = "http://${config.homeAssistantConnectedIP}:${config.homeAssistantHTTPPort}"
@@ -103,10 +107,10 @@ class AuthUtils(val config: APPConfig) {
                 url = config.homeAssistantURL.removeSuffix("/")
             }
 
-            if (config.homeAssistantDashboard != "") {
+            if (withDashboardPath && config.homeAssistantDashboard != "") {
                 return url + "/" + config.homeAssistantDashboard.removePrefix("/")
             }
-            return config.homeAssistantURL
+            return url
         }
 
         fun getURL(baseUrl: String): String {
