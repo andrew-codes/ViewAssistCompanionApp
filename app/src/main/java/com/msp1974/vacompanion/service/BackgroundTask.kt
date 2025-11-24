@@ -238,21 +238,30 @@ internal class BackgroundTaskController (private val context: Context): EventLis
                 audioRecorder.startRecording()
                     .collect { audioBuffer ->
                         var audioLevel = 0f
-                        when (audioRoute) {
-                            AudioRouteOption.NONE -> {
-                                audioLevel = audioBuffer.max()
+
+                        if (!config.isMuted) {
+                            when (audioRoute) {
+                                AudioRouteOption.NONE -> {
+                                    audioLevel = audioBuffer.max()
+                                }
+
+                                AudioRouteOption.DETECT -> {
+                                    if (wakeWordEngine != null) wakeWordEngine!!.processAudio(
+                                        audioBuffer
+                                    )
+                                    audioLevel = audioBuffer.max()
+                                }
+
+                                AudioRouteOption.STREAM -> {
+                                    val gAudioBuffer =
+                                        audioDSP.autoGain(audioBuffer, config.micGain)
+                                    val bAudioBuffer = audioDSP.floatArrayToByteBuffer(gAudioBuffer)
+                                    server.sendAudio(bAudioBuffer)
+                                    audioLevel = gAudioBuffer.max()
+                                }
+
+                                else -> {}
                             }
-                            AudioRouteOption.DETECT -> {
-                                if (wakeWordEngine != null) wakeWordEngine!!.processAudio(audioBuffer)
-                                audioLevel = audioBuffer.max()
-                            }
-                            AudioRouteOption.STREAM -> {
-                                val gAudioBuffer = audioDSP.autoGain(audioBuffer, config.micGain)
-                                val bAudioBuffer = audioDSP.floatArrayToByteBuffer(gAudioBuffer)
-                                server.sendAudio(bAudioBuffer)
-                                audioLevel = gAudioBuffer.max()
-                            }
-                            else -> {}
                         }
                         if (config.diagnosticsEnabled) {
                             sendDiagnostics(
