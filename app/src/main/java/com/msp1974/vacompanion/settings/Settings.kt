@@ -174,6 +174,10 @@ class APPConfig(val context: Context) {
         onValueChangedListener(property, oldValue, newValue)
     }
 
+    var motionDetectionSensitivity: Int by Delegates.observable(0) { property, oldValue, newValue ->
+        onValueChangedListener(property, oldValue, newValue)
+    }
+
     var currentPath: String by Delegates.observable("") { property, oldValue, newValue ->
         onValueChangedListener(property, oldValue, newValue)
     }
@@ -318,6 +322,9 @@ class APPConfig(val context: Context) {
         }
         if (settings.has("enable_motion_detection")) {
             enableMotionDetection = settings.getBoolean("enable_motion_detection")
+        }
+        if (settings.has("motion_detection_sensitivity")) {
+            motionDetectionSensitivity = settings.getInt("motion_detection_sensitivity")
         }
         if (settings.has("screen_timeout")) {
             screenTimeout = settings.getInt("screen_timeout") * 1000

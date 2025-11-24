@@ -33,6 +33,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import timber.log.Timber
 import kotlin.math.absoluteValue
+import kotlin.math.max
+import kotlin.math.min
 
 
 class CameraBackgroundTask(val context: Context) {
@@ -52,7 +54,7 @@ class CameraBackgroundTask(val context: Context) {
     private var captureSession: CameraCaptureSession? = null
     private var imageReader: ImageReader? = null
 
-    private val settleDelay: Long = 1000
+    private val settleDelay: Long = 5000
     private var settleDelayJob: Job? = null
     private var lastDetection: Long = 0
 
@@ -60,11 +62,16 @@ class CameraBackgroundTask(val context: Context) {
 
 
     init {
-        detector.setLeniency(2)
+        setSensitivity(config.motionDetectionSensitivity)
     }
 
     companion object {
         const val MOTION_INTERVAL = 10000
+        const val MAX_LENIENCY = 50
+    }
+
+    fun setSensitivity(sensitivity: Int) {
+        detector.setLeniency(min(MAX_LENIENCY, max(0, MAX_LENIENCY - (sensitivity))))
     }
 
     fun startCamera() {
@@ -73,8 +80,8 @@ class CameraBackgroundTask(val context: Context) {
             scope.launch {
                 if (!config.screenOn) {
                     config.eventBroadcaster.notifyEvent(Event("screenWakeBlackout", "", ""))
-                    delay(1000)
                 }
+                delay(2500)
                 initCam()
                 isRunning = true
             }
