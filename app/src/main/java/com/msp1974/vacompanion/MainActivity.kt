@@ -438,7 +438,9 @@ class MainActivity : AppCompatActivity(), EventListener, ComponentCallbacks2 {
     }
 
     fun screenWake(blackOut: Boolean = false) {
-        if (!blackOut) viewModel.setScreenOn(true)
+        // Screen blackout?
+        viewModel.setScreenOn(!blackOut)
+
         screen.setScreenAlwaysOn(window, config.screenAlwaysOn, false)
         screen.setScreenAutoBrightness(window, config.screenAutoBrightness)
         screen.setScreenBrightness(window, config.screenBrightness)
