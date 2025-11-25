@@ -50,6 +50,8 @@ class VAMediaPlayer(val context: Context) {
             e.printStackTrace()
         } catch (e: IOException) {
             e.printStackTrace()
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
     }
 
