@@ -1,6 +1,7 @@
 package com.msp1974.vacompanion.ui.layouts
 
 import android.content.res.Configuration
+import android.os.Build
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
@@ -81,9 +82,20 @@ fun ConnectionScreen(vaViewModel: VAViewModel = viewModel()) {
                     verticalArrangement = Arrangement.Center
                 ) {
                     InfoTextBlock(vaUiState.appInfo)
-                    LaunchOnBootSwitch(vaUiState.launchOnBoot, callback = {
-                        vaViewModel.launchOnBoot = it
-                    })
+                    if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.Q) {
+                        LaunchOnBootSwitch(vaUiState.launchOnBoot, callback = {
+                            vaViewModel.launchOnBoot = it
+                        })
+                    } else {
+                        Text(
+                            text="To launch on boot, set this app as the launcher",
+                            color = MaterialTheme.colorScheme.onPrimary,
+                            modifier = Modifier
+                                .width(280.dp)
+                                .padding(16.dp)
+
+                        )
+                    }
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -153,9 +165,20 @@ fun ConnectionScreen(vaViewModel: VAViewModel = viewModel()) {
                                 horizontalAlignment = Alignment.CenterHorizontally
                             ) {
                                 InfoTextBlock(vaUiState.appInfo)
-                                LaunchOnBootSwitch(vaUiState.launchOnBoot, callback = {
-                                    vaViewModel.launchOnBoot = it
-                                })
+                                if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.Q) {
+                                    LaunchOnBootSwitch(vaUiState.launchOnBoot, callback = {
+                                        vaViewModel.launchOnBoot = it
+                                    })
+                                } else {
+                                    Text(
+                                        text="To launch on boot, set this app as the launcher",
+                                        color = MaterialTheme.colorScheme.onPrimary,
+                                        modifier = Modifier
+                                            .width(280.dp)
+                                            .padding(16.dp)
+
+                                    )
+                                }
                             }
                         }
                     }
