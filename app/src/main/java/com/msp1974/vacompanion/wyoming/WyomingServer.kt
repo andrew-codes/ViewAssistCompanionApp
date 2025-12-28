@@ -8,7 +8,7 @@ import kotlinx.serialization.json.JsonObject
 import java.net.ServerSocket
 import kotlin.concurrent.thread
 
-enum class SatelliteState { STOPPED, RUNNING}
+enum class SatelliteState { STOPPED, RUNNING, STARTING, STOPPING}
 enum class PipelineStatus { INACTIVE, LISTENING, STREAMING }
 
 interface WyomingCallback {
@@ -75,6 +75,18 @@ class WyomingTCPServer (val context: Context, val port: Int, val cbCallback: Wyo
     fun sendStatus(data: JsonObject) {
         if (pipelineClient != null) {
             pipelineClient?.sendStatus(data)
+        }
+    }
+
+    fun sendSetting(name: String, value: Any) {
+        if (pipelineClient != null) {
+            if (value is Boolean) {
+                pipelineClient?.sendSettingChange(name, value)
+            } else if (value is Int)
+                pipelineClient?.sendSettingChange(name, value)
+            else if (value is String) {
+                pipelineClient?.sendSettingChange(name, value)
+            }
         }
     }
 

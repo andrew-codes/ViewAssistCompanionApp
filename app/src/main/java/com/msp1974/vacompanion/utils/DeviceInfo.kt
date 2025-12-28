@@ -22,6 +22,7 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
+import timber.log.Timber
 
 
 data class DeviceCapabilitiesData(
@@ -154,6 +155,17 @@ class DeviceCapabilitiesManager(val context: Context) {
                         addAll(data.sensors)
                     }
                 }
+            }
+        }
+
+        fun isDoNotDisturbEnabled(context: Context): Boolean {
+            val notificationManager =
+                context.getSystemService(NOTIFICATION_SERVICE) as NotificationManager
+            if (notificationManager.isNotificationPolicyAccessGranted) {
+                return notificationManager.currentInterruptionFilter != NotificationManager.INTERRUPTION_FILTER_ALL
+            } else {
+                Timber.w("Unable to check do not disturb, notification policy access not granted")
+                return false
             }
         }
     }
