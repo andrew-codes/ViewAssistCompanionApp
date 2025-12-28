@@ -37,6 +37,11 @@ import java.time.Instant
 import java.time.format.DateTimeFormatter
 import java.util.Timer
 import java.util.TimerTask
+import kotlin.concurrent.atomics.ExperimentalAtomicApi
+import kotlin.concurrent.atomics.decrementAndFetch
+import kotlin.concurrent.atomics.incrementAndFetch
+import kotlin.concurrent.atomics.minusAssign
+import kotlin.concurrent.atomics.plusAssign
 import kotlin.concurrent.thread
 
 class ClientHandler(private val context: Context, private val server: WyomingTCPServer, private val client: Socket) {
@@ -91,8 +96,8 @@ class ClientHandler(private val context: Context, private val server: WyomingTCP
     val filter = IntentFilter().apply { addAction(BroadcastSender.WAKE_WORD_DETECTED) }
 
     fun run() {
-        config.connectionCount += 1
-        log.d("Client $client_id connected from ${client.inetAddress.hostAddress}. Connections: ${config.connectionCount}")
+        val connections = config.atomicConnectionCount.incrementAndGet()
+        log.d("Client $client_id connected from ${client.inetAddress.hostAddress}. Connections: $connections")
         startIntervalPing()
         while (runClient) {
             try {
@@ -115,6 +120,7 @@ class ClientHandler(private val context: Context, private val server: WyomingTCP
         stop()
     }
 
+    @OptIn(ExperimentalAtomicApi::class)
     fun stop() {
         log.d("Stopping client $client_id connection handler")
         stopIntervalPing()
@@ -123,10 +129,11 @@ class ClientHandler(private val context: Context, private val server: WyomingTCP
             stopSatellite()
         }
         client.close()
-        if (config.connectionCount > 0) {
-            config.connectionCount -= 1
+
+        if (config.atomicConnectionCount.get() > 0) {
+            config.atomicConnectionCount.andDecrement
         }
-        log.w("${client.inetAddress.hostAddress}:$client_id closed the connection.  Connections remaining: ${config.connectionCount}")
+        log.w("${client.inetAddress.hostAddress}:$client_id closed the connection.  Connections remaining: ${config.atomicConnectionCount.get()}")
     }
 
     private fun startSatellite() {
@@ -224,122 +231,132 @@ class ClientHandler(private val context: Context, private val server: WyomingTCP
         }
 
         // Events not requiring running satellite
-        when (event.type) {
-            "ping" -> {
-                sendPong()
-            }
-            "describe" -> {
-                sendInfo()
-            }
-            "custom-settings" -> {
-                config.processSettings(event.getProp("settings"))
-            }
-            "capabilities" -> {
-                sendCapabilities()
-            }
-            "run-satellite" -> {
-                startSatellite()
-            }
-            "custom-event" -> {
-                handleCustomEvent(event)
-            }
-        }
-
-        // Events that must have a running satellite to be processed
-        if (satelliteStatus == SatelliteState.RUNNING) {
+        try {
             when (event.type) {
-                "pause-satellite" -> {
-                    stopSatellite()
+                "ping" -> {
+                    sendPong()
                 }
-
-                "transcribe" -> {
-                    // Sent when requesting voice command
-                    volumeDucking("all", true)
-                    requestInputAudioStream()
-                    setPipelineNextStageTimeout(10)
+                "describe" -> {
+                    sendInfo()
                 }
-
-                "voice-started" -> {
-                    // Sent when detected voice command started
-                    cancelPipelineNextStageTimeout()
+                "custom-settings" -> {
+                    config.processSettings(event.getProp("settings"))
                 }
-
-                "voice-stopped" -> {
-                    // Sent when detected voice command stopped
-                    setPipelineNextStageTimeout(15)
+                "capabilities" -> {
+                    sendCapabilities()
                 }
+                "run-satellite" -> {
+                    startSatellite()
+                }
+                "custom-event" -> {
+                    handleCustomEvent(event)
+                }
+            }
 
-                "transcript" -> {
-                    // Sent when STT converted voice command to text
-                    releaseInputAudioStream()
-                    if (event.getProp("text").lowercase().contains("never mind")) {
-                        volumeDucking("all", false)
-                    } else {
-                        // If no response from conversation engine in 10s, timeout
+            // Events that must have a running satellite to be processed
+            if (satelliteStatus == SatelliteState.RUNNING) {
+                when (event.type) {
+                    "pause-satellite" -> {
+                        stopSatellite()
+                    }
+
+                    "transcribe" -> {
+                        // Sent when requesting voice command
+                        volumeDucking("all", true)
+                        requestInputAudioStream()
                         setPipelineNextStageTimeout(10)
                     }
-                }
 
-                "synthesize" -> {
-                    // Sent when conversation engine sent response to command
-                    lastResponseIsQuestion = (event.getProp("text").replace("\n","").endsWith("?"))
-                    expectingTTSResponse = true
-                    setPipelineNextStageTimeout(10)
-                }
-
-                "pipeline-ended" -> {
-                    // Sent when pipeline has finished
-                    if (!expectingTTSResponse) {
-                        cancelPipelineNextStageTimeout()
-                        volumeDucking("all", false)
+                    "voice-started" -> {
+                        // Sent when detected voice command started
+                        setPipelineNextStageTimeout(30)
                     }
-                    if (pipelineStatus != PipelineStatus.STREAMING) {
+
+                    "voice-stopped" -> {
+                        // Sent when detected voice command stopped
+                        setPipelineNextStageTimeout(15)
+                    }
+
+                    "transcript" -> {
+                        // Sent when STT converted voice command to text
                         releaseInputAudioStream()
-                    }
-                }
-
-                "audio-start" -> {
-                    // Sent when audio stream about to start
-                    expectingTTSResponse = false  // This is it so reset expecting
-                    cancelPipelineNextStageTimeout() // Playing audio, cancel any timeout
-                    pipelineStatus = PipelineStatus.STREAMING
-                    volumeDucking("all", true)  // Duck here if announcement
-                    pcmMediaPlayer.play()
-                }
-
-                "audio-chunk" -> {
-                    // Audio chunk
-                    if (pcmMediaPlayer.isPlaying) {
-                        pcmMediaPlayer.writeAudio(event.payload)
-                    }
-                }
-
-                "audio-stop" -> {
-                    // Sent when all audio chunks sent
-                    if (pcmMediaPlayer.isPlaying) {
-                        pcmMediaPlayer.stop()
-                    }
-                    pipelineStatus = PipelineStatus.INACTIVE
-                    sendEvent(
-                        "played",
-                    )
-
-                    if (config.continueConversation && lastResponseIsQuestion) {
-                        sendStartPipeline()
-                    } else {
-                        setPipelineNextStageTimeout(2)
+                        if (event.getProp("text").lowercase().contains("never mind")) {
+                            volumeDucking("all", false)
+                        } else {
+                            // If no response from conversation engine in 10s, timeout
+                            setPipelineNextStageTimeout(10)
+                        }
                     }
 
-                }
+                    "synthesize" -> {
+                        // Sent when conversation engine sent response to command
+                        lastResponseIsQuestion =
+                            (event.getProp("text").replace("\n", "").endsWith("?"))
+                        expectingTTSResponse = true
+                        setPipelineNextStageTimeout(10)
+                    }
 
-                "error" -> {
-                    resetPipeline()
-                }
+                    "pipeline-ended" -> {
+                        // Sent when pipeline has finished
+                        if (!expectingTTSResponse) {
+                            cancelPipelineNextStageTimeout()
+                            volumeDucking("all", false)
+                        }
+                        if (pipelineStatus != PipelineStatus.STREAMING) {
+                            releaseInputAudioStream()
+                        }
+                    }
 
-                "custom-action" -> {
-                    handleCustomAction(event)
+                    "audio-start" -> {
+                        // Sent when audio stream about to start
+                        expectingTTSResponse = false  // This is it so reset expecting
+                        cancelPipelineNextStageTimeout() // Playing audio, cancel any timeout
+                        pipelineStatus = PipelineStatus.STREAMING
+                        volumeDucking("all", true)  // Duck here if announcement
+                        pcmMediaPlayer.play()
+                    }
+
+                    "audio-chunk" -> {
+                        // Audio chunk
+                        if (pcmMediaPlayer.isPlaying) {
+                            pcmMediaPlayer.writeAudio(event.payload)
+                        }
+                    }
+
+                    "audio-stop" -> {
+                        // Sent when all audio chunks sent
+                        if (pcmMediaPlayer.isPlaying) {
+                            pcmMediaPlayer.stop()
+                        }
+                        pipelineStatus = PipelineStatus.INACTIVE
+                        sendEvent(
+                            "played",
+                        )
+
+                        if (config.continueConversation && lastResponseIsQuestion) {
+                            sendStartPipeline()
+                        } else {
+                            setPipelineNextStageTimeout(2)
+                        }
+
+                    }
+
+                    "error" -> {
+                        resetPipeline()
+                    }
+
+                    "custom-action" -> {
+                        handleCustomAction(event)
+                    }
+
+                    "timer-finished" -> {
+                        actionAlarm(true)
+                    }
                 }
             }
+        } catch (ex: Exception) {
+            log.e("Error handling event: $ex")
+            ex.printStackTrace()
         }
     }
 
@@ -508,6 +525,7 @@ class ClientHandler(private val context: Context, private val server: WyomingTCP
         if (enable) {
             volumeDucking("music", true)
             alarmPlayer.startAlarm(url)
+            config.eventBroadcaster.notifyEvent(Event("screenWake", "", ""))
         } else {
             alarmPlayer.stopAlarm()
             volumeDucking("music", false)

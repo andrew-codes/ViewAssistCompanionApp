@@ -16,6 +16,7 @@ import com.msp1974.vacompanion.utils.EventNotifier
 import com.msp1974.vacompanion.utils.Logger
 import org.json.JSONObject
 import java.util.UUID
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.properties.Delegates
 import kotlin.reflect.KProperty
 
@@ -23,6 +24,15 @@ enum class BackgroundTaskStatus {
     NOT_STARTED,
     STARTING,
     STARTED,
+}
+
+enum class PageLoadingStage {
+    NOT_STARTED,
+    STARTED,
+    AUTHORISING,
+    AUTHORISED,
+    LOADED,
+    AUTH_FAILED,
 }
 
 class APPConfig(val context: Context) {
@@ -59,7 +69,8 @@ class APPConfig(val context: Context) {
     var audioChannels: Int = 1
     var audioWidth: Int = 2
 
-    var connectionCount: Int = 0
+    //var connectionCount: Int = 0
+    var atomicConnectionCount: AtomicInteger = AtomicInteger(0)
     var currentActivity: String = ""
     var backgroundTaskRunning: Boolean = false
     var backgroundTaskStatus: BackgroundTaskStatus = BackgroundTaskStatus.NOT_STARTED
