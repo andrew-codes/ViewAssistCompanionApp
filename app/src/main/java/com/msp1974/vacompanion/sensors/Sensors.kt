@@ -13,7 +13,7 @@ import android.os.BatteryManager
 import com.msp1974.vacompanion.settings.APPConfig
 import com.msp1974.vacompanion.utils.DeviceCapabilitiesManager
 import com.msp1974.vacompanion.utils.Event
-import com.msp1974.vacompanion.utils.Logger
+import timber.log.Timber
 import java.util.Timer
 import kotlin.concurrent.timer
 import kotlin.math.abs
@@ -23,7 +23,6 @@ interface SensorUpdatesCallback {
 }
 
 class Sensors(val context: Context, val cbFunc: SensorUpdatesCallback) {
-    val log = Logger()
     val config = APPConfig.getInstance(context)
     var sensorManager: SensorManager = context.getSystemService(SENSOR_SERVICE) as SensorManager
 
@@ -52,7 +51,7 @@ class Sensors(val context: Context, val cbFunc: SensorUpdatesCallback) {
                         for (i in 0..2) {
                             val diff = currAccel[i] - prevAccel[i]
                             if (abs(prevAccel[i]) > 0 && abs(diff) > 0.10) {
-                                log.i("Device bump detected -> $i: ${abs(diff)}")
+                                Timber.i("Device bump detected -> $i: ${abs(diff)}")
                                 lastBump = System.currentTimeMillis()
                                 config.eventBroadcaster.notifyEvent(Event("deviceBump", "", ""))
                             }
@@ -63,7 +62,7 @@ class Sensors(val context: Context, val cbFunc: SensorUpdatesCallback) {
                     config.eventBroadcaster.notifyEvent(Event("proximity", "", event.values[0]))
                 }
                 else -> {
-                    log.d("Sensor changed - ${event.sensor.type} -> ${event.values}")
+                    Timber.d("Sensor changed - ${event.sensor.type} -> ${event.values}")
                 }
             }
 
@@ -76,14 +75,22 @@ class Sensors(val context: Context, val cbFunc: SensorUpdatesCallback) {
     }
 
     init {
-        log.d("Starting sensors")
+        Timber.d("Starting sensors")
         val dm = DeviceCapabilitiesManager(context)
         hasBattery = dm.hasBattery()
 
-        // Register light sensor listener
-        registerSensorListener(sensorManager.getDefaultSensor(Sensor.TYPE_LIGHT))
-        registerSensorListener(sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER))
-        registerSensorListener(sensorManager.getDefaultSensor(Sensor.TYPE_PROXIMITY))
+        val sensors: Map<String, Int> = mapOf(
+            "light" to Sensor.TYPE_LIGHT,
+            "accelerometer" to Sensor.TYPE_ACCELEROMETER,
+            "proximity" to Sensor.TYPE_PROXIMITY
+        )
+        for (sensor in sensors) {
+            if (registerSensorListener(sensorManager.getDefaultSensor(sensor.value))) {
+                Timber.d("Sensor registered - ${sensor.key}")
+            } else {
+                Timber.d("Sensor not found - ${sensor.key}")
+            }
+        }
 
         startIntervalTimer()
     }
@@ -147,7 +154,7 @@ class Sensors(val context: Context, val cbFunc: SensorUpdatesCallback) {
     }
 
     fun stop() {
-        log.d("Stopping sensors")
+        Timber.d("Stopping sensors")
         sensorManager.unregisterListener(sensorListener)
         if (timer != null) {
             timer!!.cancel()
@@ -168,10 +175,8 @@ class Sensors(val context: Context, val cbFunc: SensorUpdatesCallback) {
                 sensor,
                 SensorManager.SENSOR_DELAY_NORMAL,
                 1000);
-            log.d("Sensor registered - ${sensor.stringType}")
             return true
         } else {
-            log.d("No sensor found")
             return false
         }
 
