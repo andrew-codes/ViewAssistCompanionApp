@@ -5,7 +5,6 @@ import android.content.Context
 import android.content.Context.NOTIFICATION_SERVICE
 import android.content.res.AssetManager
 import android.media.AudioManager
-import androidx.lifecycle.viewModelScope
 import com.msp1974.vacompanion.wyoming.Zeroconf
 import com.msp1974.vacompanion.audio.AudioDSP
 import com.msp1974.vacompanion.audio.AudioManager as AudManager
@@ -15,11 +14,11 @@ import com.msp1974.vacompanion.sensors.SensorUpdatesCallback
 import com.msp1974.vacompanion.sensors.Sensors
 import com.msp1974.vacompanion.settings.APPConfig
 import com.msp1974.vacompanion.ui.DiagnosticInfo
+import com.msp1974.vacompanion.utils.DeviceCapabilitiesManager
 import com.msp1974.vacompanion.utils.Event
 import com.msp1974.vacompanion.utils.EventListener
 import com.msp1974.vacompanion.utils.FirebaseManager
 import com.msp1974.vacompanion.utils.Helpers
-import com.msp1974.vacompanion.utils.ScreenUtils
 import com.msp1974.vacompanion.utils.WakeWords
 import com.msp1974.vacompanion.wyoming.WyomingCallback
 import com.msp1974.vacompanion.wyoming.WyomingTCPServer
@@ -40,7 +39,7 @@ import timber.log.Timber
 import java.util.Date
 import kotlin.concurrent.thread
 
-enum class AudioRouteOption { NONE, DETECT, STREAM}
+enum class AudioRouteOption { NONE, DETECT, PROCESS_NO_DETECT, STREAM}
 
 internal class BackgroundTaskController (private val context: Context): EventListener {
 
@@ -74,6 +73,7 @@ internal class BackgroundTaskController (private val context: Context): EventLis
         server = WyomingTCPServer(context, config.serverPort, object : WyomingCallback {
             override fun onSatelliteStarted() {
                 Timber.i("Background Task - Connection detected")
+                setInitialValues()
                 startSensors(context)
                 startOpenWakeWordDetection()
                 startInputAudio()
@@ -96,19 +96,18 @@ internal class BackgroundTaskController (private val context: Context): EventLis
 
             override fun onRequestInputAudioStream() {
                 Timber.i("Streaming audio to server")
-                if (audioRoute == AudioRouteOption.DETECT) {
-                    stopOpenWakeWordDetection()
-                }
                 audioRoute = AudioRouteOption.STREAM
             }
 
             override fun onReleaseInputAudioStream() {
                 Timber.i("Stopped streaming audio to server")
                 if (audioRoute == AudioRouteOption.STREAM) {
-                    audioRoute = AudioRouteOption.NONE
+                    audioRoute = AudioRouteOption.PROCESS_NO_DETECT
                     lastWakeWordDetectionScore = 0f
+
                     scope.launch {
-                       startOpenWakeWordDetection()
+                        delay(2000)
+                        audioRoute = AudioRouteOption.DETECT
                     }
                 }
             }
@@ -140,6 +139,7 @@ internal class BackgroundTaskController (private val context: Context): EventLis
             }
             "doNotDisturb" -> {
                 setDoNotDisturb(event.newValue as Boolean)
+                server.sendSetting("do_not_disturb", event.newValue)
             }
             "pairedDeviceID" -> {
                 if (config.pairedDeviceID != "") {
@@ -181,6 +181,7 @@ internal class BackgroundTaskController (private val context: Context): EventLis
                 server.sendStatus(
                     buildJsonObject {
                         putJsonObject("sensors", {
+                            put("motion_detected", true)
                             put("last_motion", config.lastMotion)
                         })
                     }
@@ -203,6 +204,10 @@ internal class BackgroundTaskController (private val context: Context): EventLis
         if (consumed) {
             Timber.d("BackgroundTask - Event: ${event.eventName} - ${event.newValue}")
         }
+    }
+
+    fun setInitialValues() {
+        config.doNotDisturb = DeviceCapabilitiesManager.isDoNotDisturbEnabled(context)
     }
 
     fun startSensors(context: Context) {
@@ -243,15 +248,11 @@ internal class BackgroundTaskController (private val context: Context): EventLis
                         var audioLevel = 0f
 
                         if (!config.isMuted) {
+                            if (wakeWordEngine != null) wakeWordEngine!!.processAudio(
+                                audioBuffer
+                            )
                             when (audioRoute) {
-                                AudioRouteOption.NONE -> {
-                                    audioLevel = audioBuffer.max()
-                                }
-
-                                AudioRouteOption.DETECT -> {
-                                    if (wakeWordEngine != null) wakeWordEngine!!.processAudio(
-                                        audioBuffer
-                                    )
+                                AudioRouteOption.NONE, AudioRouteOption.DETECT -> {
                                     audioLevel = audioBuffer.max()
                                 }
 
@@ -335,30 +336,36 @@ internal class BackgroundTaskController (private val context: Context): EventLis
 
             wakeWordJob = scope.launch {
                 wakeWordEngine?.detections?.collect { detection ->
-                    Timber.i("${detection.model.name} wake word detected at ${detection.score}, theshold is ${config.wakeWordThreshold}")
-                    firebase.logEvent(
-                        FirebaseManager.WAKE_WORD_DETECTED, mapOf(
-                            "wake_word" to config.wakeWord,
-                            "threshold" to config.wakeWordThreshold.toString(),
-                            "prediction" to detection.score.toString()
-                        )
-                    )
-                    // if wake up on ww, send event
-                    if (config.screenOnWakeWord) {
-                        config.eventBroadcaster.notifyEvent(Event("screenWake", "", ""))
-                    }
-
-                    if (config.wakeWordSound != "none") {
-                        WakeWordSoundPlayer(
-                            context,
-                            context.resources.getIdentifier(
-                                config.wakeWordSound,
-                                "raw",
-                                context.packageName
+                    if (audioRoute == AudioRouteOption.DETECT) {
+                        Timber.i("${detection.model.name} wake word detected at ${detection.score}, theshold is ${config.wakeWordThreshold}")
+                        firebase.logEvent(
+                            FirebaseManager.WAKE_WORD_DETECTED, mapOf(
+                                "wake_word" to config.wakeWord,
+                                "threshold" to config.wakeWordThreshold.toString(),
+                                "prediction" to detection.score.toString()
                             )
-                        ).play()
+                        )
+                        // if wake up on ww, send event
+                        if (config.screenOnWakeWord) {
+                            config.eventBroadcaster.notifyEvent(Event("screenWake", "", ""))
+                        }
+
+                        if (config.wakeWordSound != "none") {
+                            try {
+                                WakeWordSoundPlayer(
+                                    context,
+                                    context.resources.getIdentifier(
+                                        config.wakeWordSound,
+                                        "raw",
+                                        context.packageName
+                                    )
+                                ).play()
+                            } catch (e: Exception) {
+                                Timber.e("Error playing wake word sound: ${e.message.toString()}")
+                            }
+                        }
+                        BroadcastSender.sendBroadcast(context, BroadcastSender.WAKE_WORD_DETECTED)
                     }
-                    BroadcastSender.sendBroadcast(context, BroadcastSender.WAKE_WORD_DETECTED)
                 }
             }
             detectionScoreMonitorJob = scope.launch {
@@ -423,16 +430,25 @@ internal class BackgroundTaskController (private val context: Context): EventLis
 
     fun setDoNotDisturb(enable: Boolean) {
         val notificationManager =  context.getSystemService(NOTIFICATION_SERVICE) as NotificationManager
-        if (notificationManager.isNotificationPolicyAccessGranted) {
-            Timber.d("Setting do not disturb to $enable")
-            if (enable) {
-                notificationManager.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_NONE)
+        val isInDND = notificationManager.currentInterruptionFilter != NotificationManager.INTERRUPTION_FILTER_ALL
+        if (isInDND != enable) {
+            if (notificationManager.isNotificationPolicyAccessGranted) {
+                Timber.d("Setting do not disturb to $enable")
+                if (enable) {
+                    notificationManager.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_NONE)
+                } else {
+                    notificationManager.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_ALL)
+                }
             } else {
-                notificationManager.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_ALL)
+                Timber.w("Unable to set do not disturb, notification policy access not granted")
+                config.eventBroadcaster.notifyEvent(
+                    Event(
+                        "showToastMessage",
+                        "",
+                        "Unable to set do not disturb.  Permission not granted."
+                    )
+                )
             }
-        } else {
-            Timber.w("Unable to set do not disturb, notification policy access not granted")
-            config.eventBroadcaster.notifyEvent(Event("showToastMessage", "", "Unable to set do not disturb.  Permission not granted."))
         }
     }
 }
