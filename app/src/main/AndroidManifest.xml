@@ -16,6 +16,7 @@
 
     <!--Allow wake lock to keep screen on-->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.TURN_SCREEN_ON" />
 
     <!--Allow wifi toggling on Android 9 and below-->
     <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
@@ -24,7 +25,8 @@
     <uses-permission android:name="android.permission.DISABLE_KEYGUARD" />
 
     <!--Foreground Service Permissions-->
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"
+        tools:ignore="ForegroundServicesPolicy" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CAMERA" />
@@ -40,7 +42,8 @@
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="32"
         tools:ignore="ScopedStorage" />
-    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"
+        tools:ignore="RequestInstallPackagesPolicy" />
 
     <application
         android:name=".VACAApplication"
@@ -75,9 +78,8 @@
         <!--Service-->
         <service
             android:name=".service.VAForegroundService"
-            android:enabled="true"
-            android:exported="false"
-            android:foregroundServiceType="microphone|mediaPlayback|camera" />
+            android:foregroundServiceType="microphone|mediaPlayback|camera"
+            android:exported="false" />
 
         <!--Broadcast Receiver (Optional)-->
         <receiver
