@@ -6,6 +6,7 @@ import androidx.lifecycle.ViewModel
 import com.msp1974.vacompanion.broadcasts.BroadcastSender
 import com.msp1974.vacompanion.service.AudioRouteOption
 import com.msp1974.vacompanion.settings.APPConfig
+import com.msp1974.vacompanion.settings.PageLoadingStage
 import com.msp1974.vacompanion.utils.Event
 import com.msp1974.vacompanion.utils.EventListener
 import com.msp1974.vacompanion.utils.Helpers
@@ -14,6 +15,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import timber.log.Timber
 
 
 data class State(
@@ -25,7 +27,7 @@ data class State(
     var swipeRefreshEnabled: Boolean = false,
     var darkMode: Boolean = false,
     var isDND: Boolean = false,
-    var screenOn: Boolean = true,
+    var screenBlank: Boolean = true,
 
     var appInfo: Map<String, String> = mapOf(),
     var diagnosticInfo: DiagnosticInfo = DiagnosticInfo(),
@@ -33,13 +35,15 @@ data class State(
     var showAlertDialog: Boolean = false,
     var alertDialog: VADialog? = null,
     var updates: UpdateStatus = UpdateStatus(),
-
-)
+    var webViewPageLoadingStage: PageLoadingStage = PageLoadingStage.NOT_STARTED,
+    )
 
 class VAViewModel: ViewModel(), EventListener {
-    private val _vacaState = MutableStateFlow(State())
     private val log = Logger()
+
+    private val _vacaState = MutableStateFlow(State())
     val vacaState: StateFlow<State> = _vacaState.asStateFlow()
+
     var config: APPConfig? = null
     var resources: Resources? = null
 
@@ -174,10 +178,19 @@ class VAViewModel: ViewModel(), EventListener {
         }
     }
 
-    fun setScreenOn(screenOn: Boolean) {
+    fun setScreenBlank(screenOn: Boolean) {
         _vacaState.update { currentState ->
             currentState.copy(
-                screenOn = screenOn
+                screenBlank = screenOn
+            )
+        }
+    }
+
+    fun setWebViewPageLoadingState(stage: PageLoadingStage) {
+        Timber.d("WebView page loading state: $stage")
+        _vacaState.update { currentState ->
+            currentState.copy(
+                webViewPageLoadingStage = stage
             )
         }
     }

@@ -15,6 +15,7 @@ import javax.net.ssl.SSLContext
 import javax.net.ssl.TrustManager
 import javax.net.ssl.X509TrustManager
 import com.msp1974.vacompanion.settings.APPConfig
+import com.msp1974.vacompanion.settings.PageLoadingStage
 import kotlin.random.Random
 
 data class AuthToken(val tokenType: String = "", val accessToken: String = "", val expires: Long = 0, val refreshToken: String = "")
@@ -25,9 +26,11 @@ class AuthUtils(val config: APPConfig) {
     val externalAuthCallback = object : ExternalAuthCallback {
         override fun onRequestExternalAuth(view: WebView) {
             log.d("External auth callback in progress...")
+            setAuthStage(view, PageLoadingStage.AUTHORISING)
             if (config.refreshToken == "") {
                 log.d("No refresh token.  Proceeding to login screen")
                 loadUrl(view, getAuthUrl(getHAUrl(config, withDashboardPath = false)), clearCache = true)
+                setAuthStage(view, PageLoadingStage.AUTH_FAILED)
                 return
             } else if (System.currentTimeMillis() > config.tokenExpiry && config.refreshToken != "") {
                 // Need to get new access token as it has expired
@@ -36,12 +39,15 @@ class AuthUtils(val config: APPConfig) {
                 if (success) {
                     log.d("Authorising with new token")
                     callAuthJS(view)
+                    setAuthStage(view, PageLoadingStage.AUTHORISED)
                 } else {
                     log.d("Failed to refresh auth token.  Proceeding to login screen")
+                    setAuthStage(view, PageLoadingStage.AUTH_FAILED)
                     loadUrl(view, getAuthUrl(getHAUrl(config, withDashboardPath = false)), clearCache = true)
                 }
             } else if (config.accessToken != "") {
                 log.d("Auth token is still valid - authorising")
+                setAuthStage(view, PageLoadingStage.AUTHORISED)
                 callAuthJS(view)
             }
         }
@@ -51,7 +57,15 @@ class AuthUtils(val config: APPConfig) {
             config.accessToken = ""
             config.refreshToken = ""
             config.tokenExpiry = 0
+            setAuthStage(view, PageLoadingStage.AUTH_FAILED)
             loadUrl(view, getAuthUrl(getHAUrl(config)))
+        }
+
+        private fun setAuthStage(view: WebView, stage: PageLoadingStage) {
+            Handler(Looper.getMainLooper()).post({
+                val w = view as CustomWebView
+                w.setPageLoadingState(stage)
+            })
         }
 
         private fun loadUrl(view: WebView, url: String, clearCache: Boolean = false) {
@@ -91,6 +105,19 @@ class AuthUtils(val config: APPConfig) {
             } else {
                 return false
             }
+        }
+
+        private fun tokenExpiryRefreshTask(view: WebView) {
+            Handler(Looper.getMainLooper()).postDelayed({
+                try {
+                    if (System.currentTimeMillis() > config.tokenExpiry && config.refreshToken != "") {
+                        if (reAuthWithRefreshToken()) {
+                            callAuthJS(view)
+                        }
+                    }
+                    tokenExpiryRefreshTask(view)
+                } catch (e: Exception) {}
+            }, 30000)
         }
     }
 

@@ -22,6 +22,7 @@ import android.os.Handler
 import android.os.Looper
 import android.os.StrictMode
 import android.provider.Settings
+import android.view.KeyEvent
 import android.view.ViewGroup
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
@@ -67,6 +68,7 @@ import com.msp1974.vacompanion.utils.Helpers
 import com.msp1974.vacompanion.utils.Logger
 import com.msp1974.vacompanion.utils.ScreenUtils
 import com.msp1974.vacompanion.utils.Updater
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
@@ -93,6 +95,11 @@ class MainActivity : AppCompatActivity(), EventListener, ComponentCallbacks2 {
     private var updateProcessComplete: Boolean = true
     private var initialised: Boolean = false
     private var hasNetwork: Boolean = false
+    private var screenOffStartUp: Boolean = false
+    private var screenOffInProgress: Boolean = false
+    private var screenSleepWaitJob: Job? = null
+
+
 
     @OptIn(ExperimentalMirrorMode::class)
     @SuppressLint("HardwareIds", "SetTextI18n")
@@ -138,6 +145,19 @@ class MainActivity : AppCompatActivity(), EventListener, ComponentCallbacks2 {
 
         // Hide system bars
         screen.hideSystemUI(window)
+
+        // Wake screen on boot if off - keep black.
+        if (!screen.isScreenOn()  && !screen.isScreenOff()) {
+            Timber.i("Performing screen off startup....")
+            screenOffStartUp = true
+            screenWake(true)
+        } else {
+            // Set screen timeout to 10m during loading
+            // It will get reset on start satellite
+            Timber.i("Performing screen on startup....")
+            screen.setScreenTimeout(600000)
+        }
+
         setContent {
             val vaUiState by viewModel.vacaState.collectAsState()
             AppTheme(darkMode = config.darkMode, dynamicColor = false) {
@@ -147,13 +167,13 @@ class MainActivity : AppCompatActivity(), EventListener, ComponentCallbacks2 {
                     color = Color.Black
                 ) {
                     if (vaUiState.satelliteRunning) {
-                        if (!vaUiState.screenOn) {
+                        if (vaUiState.screenBlank) {
                             BlackScreen()
                         } else {
                             WebViewScreen(webView)
                         }
                     } else {
-                        if (!vaUiState.screenOn) {
+                        if (vaUiState.screenBlank) {
                             BlackScreen()
                         } else {
                             ConnectionScreen()
@@ -178,6 +198,8 @@ class MainActivity : AppCompatActivity(), EventListener, ComponentCallbacks2 {
                 }
             }
         }
+
+
 
         // Check and get required user permissions
         log.d("Checking permissions")
@@ -240,12 +262,12 @@ class MainActivity : AppCompatActivity(), EventListener, ComponentCallbacks2 {
         val screenIntentFilter = IntentFilter().apply {
             addAction(Intent.ACTION_SCREEN_ON)
             addAction(Intent.ACTION_SCREEN_OFF)
+            addAction(NotificationManager.ACTION_INTERRUPTION_FILTER_CHANGED)
         }
         registerReceiver(satelliteBroadcastReceiver, screenIntentFilter)
 
 
         config.eventBroadcaster.addListener(this)
-
         config.currentActivity = "Main"
 
         // Start background tasks
@@ -257,9 +279,20 @@ class MainActivity : AppCompatActivity(), EventListener, ComponentCallbacks2 {
     // Initiate wake word broadcast receiver
     val satelliteBroadcastReceiver: BroadcastReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
+            Timber.d("Broadcast received: ${intent.action}")
             when (intent.action) {
                 BroadcastSender.SATELLITE_STARTED -> {
                     viewModel.setSatelliteRunning(true)
+                    if (!screen.isScreenOn()) {
+                        screenOffStartUp = true
+                        if (config.screenAlwaysOn) {
+                            screenWake(blackOut = false)
+                        } else {
+                            screenWake(blackOut = true)
+                        }
+                    }
+
+                    screen.setScreenTimeout(config.screenTimeout)
                     webView.setZoomLevel(config.zoomLevel)
                     config.screenOn = screen.isScreenOn()
                     val url = AuthUtils.getURL(AuthUtils.getHAUrl(config))
@@ -282,10 +315,22 @@ class MainActivity : AppCompatActivity(), EventListener, ComponentCallbacks2 {
                     webView.loadUrl(url)
                 }
                 Intent.ACTION_SCREEN_ON -> {
+                    if (!screenOffStartUp) {
+                        viewModel.setScreenBlank(false)
+                        // If woken by hardware buttons set screen config
+                        setScreenSettings()
+                    }
                     config.screenOn = true
                 }
                 Intent.ACTION_SCREEN_OFF -> {
+                    viewModel.setScreenBlank(false)
                     config.screenOn = false
+                }
+                NotificationManager.ACTION_INTERRUPTION_FILTER_CHANGED -> {
+                    val dndEnabled = DeviceCapabilitiesManager.isDoNotDisturbEnabled(context)
+                    if (config.doNotDisturb != dndEnabled) {
+                        config.doNotDisturb = dndEnabled
+                    }
                 }
             }
         }
@@ -366,6 +411,11 @@ class MainActivity : AppCompatActivity(), EventListener, ComponentCallbacks2 {
         super.onDestroy()
     }
 
+    override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
+        Timber.i("Key pressed -> $keyCode")
+        return super.onKeyDown(keyCode, event)
+    }
+
     private fun runBackgroundTasks() {
         if ( config.backgroundTaskStatus != BackgroundTaskStatus.NOT_STARTED ) {
             log.w("Background task already running.  Not starting from MainActivity")
@@ -400,35 +450,74 @@ class MainActivity : AppCompatActivity(), EventListener, ComponentCallbacks2 {
             log.w("Error starting background tasks - ${ex.message}")
             log.w("Waking screen to allow background tasks to start")
             config.backgroundTaskStatus = BackgroundTaskStatus.NOT_STARTED
-            viewModel.vacaState.value.screenOn = false
             screenWake(true)
             screenSleep()
         }
 
+        // Reset screenOffStartup
+        if (screenOffStartUp) {
+            screenOffStartUp = false
+            screenSleep()
+        } else {
+            screenWake(false)
+        }
     }
 
     override fun onEventTriggered(event: Event) {
         var consumed = true
+        runOnUiThread {
+            if (!screenOffInProgress) {
+                when (event.eventName) {
+                    "screenAlwaysOn" -> {
+                        val enabled = event.newValue as Boolean
+                        if (enabled) {
+                            screenWake()
+                        }
+                        screen.setScreenAlwaysOn(window, enabled)
+                    }
+                    "screenAutoBrightness" -> {
+                        if (screen.isScreenOn() and !viewModel.vacaState.value.screenBlank) {
+                            screen.setScreenAutoBrightness(
+                                window,
+                                event.newValue as Boolean
+                            )
+                        }
+                    }
+                    "screenBrightness" -> {
+                        if (screen.isScreenOn() and !viewModel.vacaState.value.screenBlank) {
+                            screen.setScreenBrightness(window, event.newValue as Float)
+                        }
+                    }
+                    "screenTimeout" -> screen.setScreenTimeout(config.screenTimeout)
+                    else -> consumed = false
+                }
+            }
+            if (consumed) {
+                log.d("MainActivity - Setting: ${event.eventName} - ${event.newValue}")
+            }
 
-        when (event.eventName) {
-            "refresh" -> runOnUiThread { webView.reload() }
-            "zoomLevel" -> runOnUiThread { webView.setZoomLevel(event.newValue as Int) }
-            "darkMode" -> runOnUiThread { setDarkMode(event.newValue as Boolean) }
-            "screenAlwaysOn" -> runOnUiThread { screen.setScreenAlwaysOn(window, event.newValue as Boolean, true) }
-            "screenTimeout" -> runOnUiThread { screen.setScreenTimeout(config.screenTimeout) }
-            "screenAutoBrightness" -> runOnUiThread { screen.setScreenAutoBrightness(window, event.newValue as Boolean) }
-            "screenBrightness" -> runOnUiThread { screen.setScreenBrightness(window, event.newValue as Float) }
-            "screenWake" -> runOnUiThread { screenWake() }
-            "screenWakeBlackout" -> runOnUiThread { screenWake(true) }
-            "screenSleep" -> runOnUiThread { screenSleep() }
-            "deviceBump" -> runOnUiThread { if (config.screenOnBump) screenWake() }
-            "proximity" -> runOnUiThread { if (config.screenOnProximity && event.newValue as Float == 0f) screenWake() }
-            "motion" -> runOnUiThread { onMotion() }
-            "showToastMessage" -> runOnUiThread { Toast.makeText(this, event.newValue as String, Toast.LENGTH_SHORT).show() }
-            else -> consumed = false
-        }
-        if (consumed) {
-            log.d("MainActivity - Event: ${event.eventName} - ${event.newValue}")
+            consumed = true
+
+            when (event.eventName) {
+                "zoomLevel" -> webView.setZoomLevel(event.newValue as Int)
+                "darkMode" -> setDarkMode(event.newValue as Boolean)
+                "refresh" -> webView.reload()
+                "screenWake" -> screenWake(false)
+                "screenWakeBlackout" -> screenWake(true)
+                "screenSleep" -> screenSleep()
+                "deviceBump" -> if (config.screenOnBump) screenWake()
+                "proximity" -> if (config.screenOnProximity && event.newValue as Float == 0f) screenWake()
+                "motion" -> onMotion()
+                "showToastMessage" -> Toast.makeText(
+                    this,
+                    event.newValue as String,
+                    Toast.LENGTH_SHORT
+                ).show()
+                else -> consumed = false
+            }
+            if (consumed) {
+                log.d("MainActivity - Event: ${event.eventName} - ${event.newValue}")
+            }
         }
     }
 
@@ -437,31 +526,52 @@ class MainActivity : AppCompatActivity(), EventListener, ComponentCallbacks2 {
         if (config.screenOnMotion) screenWake()
     }
 
-    fun screenWake(blackOut: Boolean = false) {
-        // Screen blackout?
-        viewModel.setScreenOn(!blackOut)
-
-        screen.setScreenAlwaysOn(window, config.screenAlwaysOn, false)
-        screen.setScreenAutoBrightness(window, config.screenAutoBrightness)
+    fun setScreenSettings() {
         screen.setScreenBrightness(window, config.screenBrightness)
+        screen.setScreenAutoBrightness(window, config.screenAutoBrightness)
+        screen.setScreenTimeout(config.screenTimeout)
+        screen.setScreenAlwaysOn(window, config.screenAlwaysOn)
+    }
+
+    fun screenWake(blackOut: Boolean = false) {
+        Timber.d("Wake screen. Blackout = $blackOut")
+
+        // Cancel any screen sleep timer
+        if (screenSleepWaitJob != null && screenSleepWaitJob!!.isActive) {
+            screenSleepWaitJob!!.cancel()
+        }
+
+        viewModel.setScreenBlank(blackOut)
+
+        if (blackOut) {
+            screen.setScreenBrightness(window, 0.01f)
+            screen.setScreenAutoBrightness(window, false)
+            screen.setScreenTimeout(1000)
+        } else {
+            setScreenSettings()
+        }
+
         screen.wakeScreen()
         config.screenOn = true
-        screen.setScreenTimeout(config.screenTimeout)
     }
 
     fun screenSleep() {
-        viewModel.setScreenOn(false)
-        screen.setScreenAlwaysOn(window, false)
-        screen.setScreenAutoBrightness(window, false)
-        screen.setScreenBrightness(window, 0.01f)
-        screen.setPartialWakeLock()
-        if (screen.canWriteScreenSetting()) {
-            screen.setScreenTimeout(1000)
-            lifecycleScope.launch {
-                waitForScreenOff()
+        Timber.d("Sleeping screen")
+        if (!screenOffInProgress) {
+            screenOffInProgress = true
+            viewModel.setScreenBlank(true)
+            screen.setScreenAlwaysOn(window, false)
+            screen.setScreenAutoBrightness(window, false)
+            screen.setScreenBrightness(window, 0.01f)
+            screen.setPartialWakeLock()
+            if (screen.setScreenTimeout(1000)) {
+                screenSleepWaitJob = lifecycleScope.launch {
+                    waitForScreenOff()
+                }
+            } else {
+                config.screenOn = false
+                screenOffInProgress = false
             }
-        } else {
-            config.screenOn = false
         }
     }
 
@@ -475,8 +585,12 @@ class MainActivity : AppCompatActivity(), EventListener, ComponentCallbacks2 {
             }
         } catch (ex: Exception) {
             log.w("Timed out waiting for screen off")
+            screenOffInProgress = false
             return
         }
+        config.screenOn = false
+        screenOffInProgress = false
+        viewModel.setScreenBlank(false)
         log.d("Screen off")
     }
 

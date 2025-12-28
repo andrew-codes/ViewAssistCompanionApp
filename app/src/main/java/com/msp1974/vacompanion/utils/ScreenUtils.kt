@@ -12,13 +12,9 @@ import android.view.WindowManager
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
-import androidx.lifecycle.lifecycleScope
 import com.google.firebase.Firebase
 import com.google.firebase.crashlytics.crashlytics
 import com.msp1974.vacompanion.settings.APPConfig
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withTimeout
 
 
 class ScreenUtils(val context: Context) : ContextWrapper(context) {
@@ -54,19 +50,15 @@ class ScreenUtils(val context: Context) : ContextWrapper(context) {
         }
     }
 
-    fun setScreenAlwaysOn(window: Window, state: Boolean, turnScreenOn: Boolean = false) {
+    fun setScreenAlwaysOn(window: Window, state: Boolean) {
         // wake lock
+        window.addFlags(WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD)
+        window.addFlags(WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED)
+        window.decorView.keepScreenOn = state
         if (state) {
-            if (turnScreenOn && !isScreenOn()) {
-                wakeScreen()
-            }
             window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-            window.addFlags(WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD)
-            window.addFlags(WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED)
-            window.decorView.keepScreenOn = true
         } else {
             window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-            window.decorView.keepScreenOn = false
         }
     }
 
@@ -109,14 +101,14 @@ class ScreenUtils(val context: Context) : ContextWrapper(context) {
         }
     }
 
-    fun wakeScreen(lockDuration: Long = 1000) {
+    fun wakeScreen(lockDuration: Long = 5000) {
         log.d("Acquiring screen on wake lock")
         if (wakeLock != null && wakeLock!!.isHeld) {
             wakeLock!!.release()
         }
         val pm = getSystemService(POWER_SERVICE) as PowerManager
         wakeLock = pm.newWakeLock(
-            PowerManager.SCREEN_BRIGHT_WAKE_LOCK or PowerManager.ACQUIRE_CAUSES_WAKEUP or PowerManager.ON_AFTER_RELEASE,
+            PowerManager.FULL_WAKE_LOCK or PowerManager.ACQUIRE_CAUSES_WAKEUP or PowerManager.ON_AFTER_RELEASE,
             "vacompanion.ScreenUtils:wakeLock"
         )
         wakeLock?.acquire(lockDuration)
@@ -156,10 +148,17 @@ class ScreenUtils(val context: Context) : ContextWrapper(context) {
         return Settings.System.getString(contentResolver, Settings.System.SCREEN_OFF_TIMEOUT).toInt()
     }
 
-    fun setScreenTimeout(timeout: Int) {
+    fun setScreenTimeout(timeout: Int): Boolean {
         if (canWriteScreenSetting()) {
-            Settings.System.putInt(contentResolver, Settings.System.SCREEN_OFF_TIMEOUT, timeout)
+            try {
+                Settings.System.putInt(contentResolver, Settings.System.SCREEN_OFF_TIMEOUT, timeout)
+                return true
+            } catch (e: Exception) {
+                log.e("Error setting screen timeout: $e")
+                return false
+            }
         }
+        return false
     }
 
     fun hideSystemUI(window: Window) {

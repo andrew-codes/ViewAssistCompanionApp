@@ -3,6 +3,7 @@ package com.msp1974.vacompanion.utils
 import android.annotation.SuppressLint
 import android.content.DialogInterface
 import android.content.res.Configuration
+import android.graphics.Bitmap
 import android.net.http.SslError
 import android.os.Handler
 import android.os.Looper
@@ -20,11 +21,13 @@ import com.msp1974.vacompanion.broadcasts.BroadcastSender
 import com.msp1974.vacompanion.jsinterface.ExternalAuthCallback
 import com.msp1974.vacompanion.jsinterface.WebAppInterface
 import com.msp1974.vacompanion.jsinterface.WebViewJavascriptInterface
+import com.msp1974.vacompanion.settings.PageLoadingStage
 import com.msp1974.vacompanion.ui.VAViewModel
+import timber.log.Timber
 import java.net.URL
 
 
-class CustomWebViewClient(viewModel: VAViewModel): WebViewClientCompat()  {
+class CustomWebViewClient(val viewModel: VAViewModel): WebViewClientCompat()  {
     val log = Logger()
     private val firebase = FirebaseManager.getInstance()
     val config = viewModel.config!!
@@ -71,6 +74,26 @@ class CustomWebViewClient(viewModel: VAViewModel): WebViewClientCompat()  {
             }
         }
         return true
+    }
+
+    override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
+        Timber.d("Page started: $url")
+        setPageLoadingState(PageLoadingStage.STARTED)
+        super.onPageStarted(view, url, favicon)
+    }
+
+    override fun onPageFinished(view: WebView?, url: String?) {
+        if (viewModel.vacaState.value.webViewPageLoadingStage == PageLoadingStage.AUTHORISED) {
+            Handler(Looper.getMainLooper()).postDelayed({
+                setPageLoadingState(PageLoadingStage.LOADED)
+            }, 1000)
+            Timber.d("Page finished loading: $url")
+        }
+        super.onPageFinished(view, url)
+    }
+
+    fun setPageLoadingState(stage: PageLoadingStage) {
+        viewModel.setWebViewPageLoadingState(stage)
     }
 
     @Deprecated("Deprecated in Java")

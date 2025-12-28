@@ -6,14 +6,19 @@ import android.content.Context
 import android.content.res.Configuration
 import android.view.MotionEvent
 import android.content.res.Resources.NotFoundException
+import android.os.Handler
+import android.os.Looper
 import android.util.AttributeSet
 import android.webkit.*
 import androidx.webkit.WebSettingsCompat
 import androidx.webkit.WebSettingsCompat.DARK_STRATEGY_PREFER_WEB_THEME_OVER_USER_AGENT_DARKENING
 import androidx.webkit.WebViewFeature
+import com.msp1974.vacompanion.jsinterface.ViewAssistCallback
 import com.msp1974.vacompanion.jsinterface.WebAppInterface
 import com.msp1974.vacompanion.jsinterface.WebViewJavascriptInterface
 import com.msp1974.vacompanion.settings.APPConfig
+import com.msp1974.vacompanion.settings.PageLoadingStage
+import timber.log.Timber
 
 @SuppressLint("SetJavaScriptEnabled", "ViewConstructor")
 class CustomWebView @JvmOverloads constructor(
@@ -68,10 +73,21 @@ class CustomWebView @JvmOverloads constructor(
         addJavascriptInterface(androidInterface, "Android")
         if (webViewClient::class == CustomWebViewClient::class) {
             val webViewClientA = webViewClient as CustomWebViewClient
-            addJavascriptInterface(WebAppInterface(webViewClientA.config.uuid), "ViewAssistApp")
+            addJavascriptInterface(WebAppInterface(webViewClientA.config.uuid, ViewAssistEventHandler), "ViewAssistApp")
             addJavascriptInterface(WebViewJavascriptInterface(this, AuthUtils(config).externalAuthCallback), "externalApp")
         }
 
+    }
+
+    val ViewAssistEventHandler = object : ViewAssistCallback {
+        override fun onEvent(event: String, data: String) {
+            //if (event == "location-changed") {
+            //    Handler(Looper.getMainLooper()).post({
+            //        setPageLoadingState(PageLoadingStage.LOADED)
+            //    })
+            //}
+            Timber.d("Event received: $event, $data")
+        }
     }
 
     @SuppressLint("ClickableViewAccessibility")
@@ -111,6 +127,11 @@ class CustomWebView @JvmOverloads constructor(
             setInitialScale(level)
         }
 
+    }
+
+    fun setPageLoadingState(stage: PageLoadingStage) {
+        val w = webViewClient as CustomWebViewClient
+        w.setPageLoadingState(stage)
     }
 
     companion object {
