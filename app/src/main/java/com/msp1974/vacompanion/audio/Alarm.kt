@@ -1,13 +1,17 @@
 package com.msp1974.vacompanion.audio
 
 import android.content.Context
+import android.media.AudioAttributes
 import android.media.MediaPlayer
+import android.net.Uri
 import com.msp1974.vacompanion.R
 import com.msp1974.vacompanion.settings.APPConfig
 import com.msp1974.vacompanion.utils.Logger
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import kotlin.concurrent.thread
+import androidx.core.net.toUri
+
 
 class Alarm(val context: Context) {
     private val log = Logger()
@@ -20,13 +24,22 @@ class Alarm(val context: Context) {
 
     fun startAlarm(url: String = "") {
         if (mediaPlayer == null) {
-            if (url != "") {
-                mediaPlayer = MediaPlayer()
-                mediaPlayer?.setDataSource(url)
-                mediaPlayer?.prepare()
-            } else {
-                mediaPlayer = MediaPlayer.create(context, R.raw.alarm_sound)
+            mediaPlayer = MediaPlayer().apply {
+                if (url != "") {
+                    setDataSource(url)
+                } else {
+                    val mediaPath =
+                        ("android.resource://" + context.packageName + "/" + R.raw.alarm_sound).toUri()
+                    setDataSource(context, mediaPath)
+                }
+                setAudioAttributes(
+                    AudioAttributes.Builder()
+                        .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+                        .setUsage(AudioAttributes.USAGE_NOTIFICATION)
+                        .build()
+                )
             }
+            mediaPlayer?.prepare()
             mediaPlayer?.isLooping = true
             mediaPlayer?.start()
             isSounding = true
@@ -38,6 +51,7 @@ class Alarm(val context: Context) {
         if (mediaPlayer != null && mediaPlayer!!.isPlaying) {
             mediaPlayer!!.stop()
             isSounding = false
+            mediaPlayer!!.reset()
             mediaPlayer!!.release()
             mediaPlayer = null
         }
