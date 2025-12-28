@@ -85,6 +85,7 @@ class VAForegroundService : Service() {
                 }
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                     requires += ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
+                    requires += ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA
                 }
 
                 val notification =

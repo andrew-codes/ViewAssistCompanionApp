@@ -78,10 +78,6 @@ class CameraBackgroundTask(val context: Context) {
         if (!isRunning) {
             // Cant start camera if screen off so turn on and wait
             scope.launch {
-                if (!config.screenOn) {
-                    config.eventBroadcaster.notifyEvent(Event("screenWakeBlackout", "", ""))
-                }
-                delay(2500)
                 initCam()
                 isRunning = true
             }
