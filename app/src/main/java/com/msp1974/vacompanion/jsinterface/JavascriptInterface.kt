@@ -12,12 +12,21 @@ interface ExternalAuthCallback {
     fun onRequestRevokeExternalAuth(view: WebView)
 }
 
+interface ViewAssistCallback {
+    fun onEvent(event: String, data: String)
+}
+
 /** Instantiate the interface and set the context.  */
-class WebAppInterface(val uuid: String) {
+class WebAppInterface(val uuid: String, val cbCallback: ViewAssistCallback) {
 
     @JavascriptInterface
     fun getViewAssistCAUUID(): String {
         return uuid
+    }
+
+    @JavascriptInterface
+    fun sendEvent(event: String, data: String) {
+        cbCallback.onEvent(event, data)
     }
 }
 
