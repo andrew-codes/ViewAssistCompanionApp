@@ -34,6 +34,7 @@ data class DeviceCapabilitiesData(
     val hasBattery: Boolean,
     val hasFrontCamera: Boolean,
     val hasDND: Boolean,
+    val proximitySensorType: String,
     val sensors: List<JsonObject>,
 )
 
@@ -54,8 +55,26 @@ class DeviceCapabilitiesManager(val context: Context) {
             hasBattery = hasBattery(),
             hasFrontCamera = hasFrontCamera(),
             hasDND = hasDND(),
+            proximitySensorType = getProximitySensorType(),
             sensors = getAvailableSensors(),
         )
+    }
+
+    fun getProximitySensorType(): String {
+        // Some devices have raw proximity sensors that report raw ADC values 
+        // (IR reflection intensity) instead of standard distance or binary values.
+        // E.g. Rockchip PX30_EVB reports ~50 (ambient) to >4000 (close).
+        val sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
+        val proximitySensor = sensorManager.getDefaultSensor(Sensor.TYPE_PROXIMITY)
+        
+        if (proximitySensor == null) {
+            return "none"
+        }
+
+        val isPx30Evb = android.os.Build.DEVICE.equals("px30_evb", ignoreCase = true) ||
+                        android.os.Build.MODEL.equals("px30_evb", ignoreCase = true)
+
+        return if (isPx30Evb) "raw" else "standard"
     }
 
     fun getAvailableSensors(): List<JsonObject> {
@@ -151,6 +170,7 @@ class DeviceCapabilitiesManager(val context: Context) {
                     put("has_battery", data.hasBattery)
                     put("has_front_camera", data.hasFrontCamera)
                     put("has_dnd", data.hasDND)
+                    put("proximity_sensor_type", data.proximitySensorType)
                     putJsonArray("sensors") {
                         addAll(data.sensors)
                     }

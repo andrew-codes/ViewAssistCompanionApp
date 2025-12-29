@@ -32,6 +32,8 @@ class Sensors(val context: Context, val cbFunc: SensorUpdatesCallback) {
     var timer: Timer? = null
 
     var hasBattery = false
+    var isRawProximitySensor = false
+    var lastCalculatedProximity: Float = -1f
     var lastAccel: FloatArray = FloatArray(3)
     var lastBump: Long = 0
 
@@ -59,7 +61,16 @@ class Sensors(val context: Context, val cbFunc: SensorUpdatesCallback) {
                     }
                 }
                 Sensor.TYPE_PROXIMITY -> {
-                    config.eventBroadcaster.notifyEvent(Event("proximity", "", event.values[0]))
+                    if (isRawProximitySensor)
+                    {
+                        val calculatedProximity = if (event.values[0] > config.rawProximitySensorThreshold) 0f else 1f
+                        if(calculatedProximity != lastCalculatedProximity) {
+                            lastCalculatedProximity = calculatedProximity
+                            config.eventBroadcaster.notifyEvent(Event("proximity", "", calculatedProximity))
+                        }
+                    } else {
+                        config.eventBroadcaster.notifyEvent(Event("proximity", "", event.values[0]))
+                    }
                 }
                 else -> {
                     Timber.d("Sensor changed - ${event.sensor.type} -> ${event.values}")
@@ -77,6 +88,7 @@ class Sensors(val context: Context, val cbFunc: SensorUpdatesCallback) {
     init {
         Timber.d("Starting sensors")
         val dm = DeviceCapabilitiesManager(context)
+        isRawProximitySensor = dm.getProximitySensorType() == "raw"
         hasBattery = dm.hasBattery()
 
         val sensors: Map<String, Int> = mapOf(
