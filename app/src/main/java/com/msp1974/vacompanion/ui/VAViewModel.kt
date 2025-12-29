@@ -11,6 +11,7 @@ import com.msp1974.vacompanion.utils.Event
 import com.msp1974.vacompanion.utils.EventListener
 import com.msp1974.vacompanion.utils.Helpers
 import com.msp1974.vacompanion.utils.Logger
+import com.msp1974.vacompanion.utils.Permissions
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -34,6 +35,7 @@ data class State(
 
     var showAlertDialog: Boolean = false,
     var alertDialog: VADialog? = null,
+    var permissions: PermissionsStatus = PermissionsStatus(),
     var updates: UpdateStatus = UpdateStatus(),
     var webViewPageLoadingStage: PageLoadingStage = PageLoadingStage.NOT_STARTED,
     )
@@ -46,6 +48,8 @@ class VAViewModel: ViewModel(), EventListener {
 
     var config: APPConfig? = null
     var resources: Resources? = null
+    var permissions: Permissions? = null
+
 
     init {
         _vacaState.value = State()
@@ -54,6 +58,7 @@ class VAViewModel: ViewModel(), EventListener {
     fun bind(config: APPConfig, resources: Resources) {
         this.config = config
         this.resources = resources
+        this.permissions = Permissions(config.context)
         this.config?.eventBroadcaster?.addListener(this)
 
         initValues()
@@ -217,6 +222,18 @@ class VAViewModel: ViewModel(), EventListener {
         BroadcastSender.sendBroadcast(config!!.context, BroadcastSender.VERSION_MISMATCH)
     }
 
+    fun requestPermissions() {
+        BroadcastSender.sendBroadcast(config!!.context, BroadcastSender.REQUEST_MISSING_PERMISSIONS)
+    }
+
+    fun setPermissionsStatus(core: Boolean, optional: Boolean) {
+        _vacaState.update { currentState ->
+            currentState.copy(
+                permissions = PermissionsStatus(core, optional)
+            )
+        }
+    }
+
     fun clearPairedDevice() {
         val d = VADialog(
             title = "Clear Paired Device Entry",
@@ -257,6 +274,11 @@ class VADialog(
 data class UpdateStatus(
     var updateAvailable: Boolean = false,
     var availableVersion: String = "0.0.0"
+)
+
+data class PermissionsStatus(
+    var hasCorePermissions: Boolean = false,
+    var hasOptionalPermissions: Boolean = false
 )
 
 data class DiagnosticInfo(
