@@ -21,6 +21,18 @@ class ScreenUtils(val context: Context) : ContextWrapper(context) {
     var log = Logger()
     var config = APPConfig.getInstance(context)
     private var wakeLock: PowerManager.WakeLock? = null
+    var initBrightness: Float = 0f
+
+    init {
+        initBrightness = getScreenBrightness()
+    }
+
+    fun getScreenBrightness(): Float {
+        return Settings.System.getInt(
+            contentResolver,
+            Settings.System.SCREEN_BRIGHTNESS
+        ) / 255f
+    }
 
     fun setScreenBrightness(window: Window, brightness: Float) {
         try {

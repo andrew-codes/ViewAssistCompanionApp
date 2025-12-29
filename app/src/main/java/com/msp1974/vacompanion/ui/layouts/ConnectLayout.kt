@@ -28,6 +28,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalConfiguration
@@ -110,6 +111,21 @@ fun ConnectionScreen(vaViewModel: VAViewModel = viewModel()) {
                                 modifier = Modifier.padding(top=30.dp),
                                 onClick = { vaViewModel.checkForUpdate() })
                         }
+                        if (!vaUiState.permissions.hasCorePermissions || !vaUiState.permissions.hasOptionalPermissions) {
+                            PermissionStatusButton(
+                                text = "Permissions",
+                                colour = if (!vaUiState.permissions.hasCorePermissions) CustomColours.RED else CustomColours.AMBER,
+                                modifier = Modifier.padding(top=30.dp),
+                                onClick = { vaViewModel.requestPermissions() }
+                            )
+                        } else {
+                            PermissionStatusButton(
+                                text = "Permissions",
+                                colour = CustomColours.GREEN,
+                                modifier = Modifier.padding(top=30.dp),
+                                onClick = {}
+                            )
+                        }
                     }
 
                 }
@@ -156,6 +172,14 @@ fun ConnectionScreen(vaViewModel: VAViewModel = viewModel()) {
                                         text = stringResource(R.string.button_update_required),
                                         modifier = Modifier.padding(16.dp),
                                         onClick = { vaViewModel.checkForUpdate() })
+                                }
+                                if (!vaUiState.permissions.hasCorePermissions || !vaUiState.permissions.hasOptionalPermissions) {
+                                    PermissionStatusButton(
+                                        text = "Permissions",
+                                        colour = if (!vaUiState.permissions.hasCorePermissions) CustomColours.RED else CustomColours.AMBER,
+                                        modifier = Modifier.padding(16.dp),
+                                        onClick = { vaViewModel.requestPermissions() }
+                                    )
                                 }
                             }
                             Column(
@@ -262,6 +286,17 @@ fun UpdateButton(text: String, modifier: Modifier = Modifier, onClick: () -> Uni
         colors = ButtonDefaults.buttonColors(
             containerColor = CustomColours.AMBER,
             contentColor = MaterialTheme.colorScheme.onPrimary,
+        )
+    ) { Text(text) }
+}
+
+@Composable
+fun PermissionStatusButton(text: String, colour: Color, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    Button(
+        onClick = { onClick() },
+        modifier = modifier,
+        colors = ButtonDefaults.buttonColors(
+            containerColor = colour
         )
     ) { Text(text) }
 }

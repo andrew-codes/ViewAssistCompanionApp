@@ -5,8 +5,10 @@ import android.annotation.SuppressLint
 import android.app.AlertDialog
 import android.app.NotificationManager
 import android.app.UiModeManager
+import android.app.admin.DevicePolicyManager
 import android.content.BroadcastReceiver
 import android.content.ComponentCallbacks2
+import android.content.ComponentName
 import android.content.Context
 import android.content.DialogInterface
 import android.content.Intent
@@ -66,6 +68,7 @@ import com.msp1974.vacompanion.utils.EventListener
 import com.msp1974.vacompanion.utils.FirebaseManager
 import com.msp1974.vacompanion.utils.Helpers
 import com.msp1974.vacompanion.utils.Logger
+import com.msp1974.vacompanion.utils.Permissions
 import com.msp1974.vacompanion.utils.ScreenUtils
 import com.msp1974.vacompanion.utils.Updater
 import kotlinx.coroutines.Job
@@ -91,6 +94,7 @@ class MainActivity : AppCompatActivity(), EventListener, ComponentCallbacks2 {
 
     private lateinit var screen: ScreenUtils
     private lateinit var updater: Updater
+    private lateinit var permissions: Permissions
     private var screenOrientation: Int = 0
     private var updateProcessComplete: Boolean = true
     private var initialised: Boolean = false
@@ -118,6 +122,9 @@ class MainActivity : AppCompatActivity(), EventListener, ComponentCallbacks2 {
         config = APPConfig.getInstance(this)
         screen = ScreenUtils(this)
         updater = Updater(this)
+        permissions = Permissions(this)
+
+        screenOrientation = resources.configuration.orientation
 
         onBackPressedDispatcher.addCallback(this, onBackButton)
         setFirebaseUserProperties()
@@ -147,7 +154,7 @@ class MainActivity : AppCompatActivity(), EventListener, ComponentCallbacks2 {
         screen.hideSystemUI(window)
 
         // Wake screen on boot if off - keep black.
-        if (!screen.isScreenOn()  && !screen.isScreenOff()) {
+        if (!screen.isScreenOn()  && screen.isScreenOff()) {
             Timber.i("Performing screen off startup....")
             screenOffStartUp = true
             screenWake(true)
@@ -155,7 +162,8 @@ class MainActivity : AppCompatActivity(), EventListener, ComponentCallbacks2 {
             // Set screen timeout to 10m during loading
             // It will get reset on start satellite
             Timber.i("Performing screen on startup....")
-            screen.setScreenTimeout(600000)
+            screenWake()
+            screen.setScreenAlwaysOn(window, true)
         }
 
         setContent {
@@ -203,7 +211,17 @@ class MainActivity : AppCompatActivity(), EventListener, ComponentCallbacks2 {
 
         // Check and get required user permissions
         log.d("Checking permissions")
-        checkAndRequestPermissions()
+        updatePermissionStatus()
+        if (!viewModel.vacaState.value.permissions.hasCorePermissions || !viewModel.vacaState.value.permissions.hasOptionalPermissions) {
+            // Need to get permissions
+            LocalBroadcastManager.getInstance(this).registerReceiver(satelliteBroadcastReceiver, IntentFilter().apply {
+                addAction(BroadcastSender.REQUEST_MISSING_PERMISSIONS)
+            })
+            checkAndRequestPermissions()
+        } else {
+            log.d("All permissions already granted")
+            initialise()
+        }
 
     }
 
@@ -234,8 +252,9 @@ class MainActivity : AppCompatActivity(), EventListener, ComponentCallbacks2 {
     }
 
     fun initialise() {
-        if (!hasPermissions()) {
+        if (!viewModel.vacaState.value.permissions.hasCorePermissions) {
             setStatus(getString(R.string.status_no_permissions))
+            viewModel.setScreenBlank(false)
             return
         }
         if (!hasNetwork) {
@@ -245,6 +264,8 @@ class MainActivity : AppCompatActivity(), EventListener, ComponentCallbacks2 {
             }, 1000)
             return
         }
+
+        if (initialised) return
 
         // Make volume keys adjust music stream
         volumeControlStream = AudioManager.STREAM_MUSIC
@@ -307,6 +328,9 @@ class MainActivity : AppCompatActivity(), EventListener, ComponentCallbacks2 {
                 }
                 BroadcastSender.VERSION_MISMATCH -> {
                     runUpdateRoutine()
+                }
+                BroadcastSender.REQUEST_MISSING_PERMISSIONS -> {
+                    checkAndRequestPermissions()
                 }
                 BroadcastSender.WEBVIEW_CRASH -> {
                     initWebView()
@@ -527,15 +551,16 @@ class MainActivity : AppCompatActivity(), EventListener, ComponentCallbacks2 {
     }
 
     fun setScreenSettings() {
-        screen.setScreenBrightness(window, config.screenBrightness)
-        screen.setScreenAutoBrightness(window, config.screenAutoBrightness)
-        screen.setScreenTimeout(config.screenTimeout)
-        screen.setScreenAlwaysOn(window, config.screenAlwaysOn)
+        if (viewModel.vacaState.value.satelliteRunning) {
+            screen.setScreenBrightness(window, config.screenBrightness)
+            screen.setScreenAutoBrightness(window, config.screenAutoBrightness)
+            screen.setScreenTimeout(config.screenTimeout)
+            screen.setScreenAlwaysOn(window, config.screenAlwaysOn)
+        }
     }
 
     fun screenWake(blackOut: Boolean = false) {
         Timber.d("Wake screen. Blackout = $blackOut")
-
         // Cancel any screen sleep timer
         if (screenSleepWaitJob != null && screenSleepWaitJob!!.isActive) {
             screenSleepWaitJob!!.cancel()
@@ -557,6 +582,11 @@ class MainActivity : AppCompatActivity(), EventListener, ComponentCallbacks2 {
 
     fun screenSleep() {
         Timber.d("Sleeping screen")
+        if (permissions.isDeviceAdmin()) {
+            lockScreen()
+            return
+        }
+
         if (!screenOffInProgress) {
             screenOffInProgress = true
             viewModel.setScreenBlank(true)
@@ -572,6 +602,13 @@ class MainActivity : AppCompatActivity(), EventListener, ComponentCallbacks2 {
                 config.screenOn = false
                 screenOffInProgress = false
             }
+        }
+    }
+
+    fun lockScreen() {
+        if (permissions.isDeviceAdmin()) {
+            val dpm = getSystemService(DEVICE_POLICY_SERVICE) as DevicePolicyManager
+            dpm.lockNow()
         }
     }
 
@@ -614,14 +651,12 @@ class MainActivity : AppCompatActivity(), EventListener, ComponentCallbacks2 {
         webView.refreshDarkMode()
     }
 
-    private fun hasPermissions(): Boolean {
-        if (config.hasRecordAudioPermission) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                return config.hasPostNotificationPermission
-            }
-            return true
-        }
-        return false
+    private fun updatePermissionStatus() {
+        val corePermissions = permissions.hasCorePermissions()
+        val optionalPermissions = permissions.hasOptionalPermissions()
+        Timber.d("Core permissions: $corePermissions")
+        Timber.d("Optional permissions: $optionalPermissions")
+        viewModel.setPermissionsStatus(corePermissions, optionalPermissions)
     }
 
     private fun checkAndRequestPermissions() {
@@ -678,43 +713,48 @@ class MainActivity : AppCompatActivity(), EventListener, ComponentCallbacks2 {
 
     override fun onRequestPermissionsResult(
         requestCode: Int,
-        permissions: Array<String>,
+        appPermissions: Array<String>,
         grantResults: IntArray
     ) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (permissions.isNotEmpty()) {
-            for (i in permissions.indices) {
-                if (permissions[i] == permission.RECORD_AUDIO && grantResults[i] == PackageManager.PERMISSION_GRANTED) {
-                    log.d("Permission granted: ${permissions[i]}")
-                    config.hasRecordAudioPermission = true
+        super.onRequestPermissionsResult(requestCode, appPermissions, grantResults)
+        if (appPermissions.isNotEmpty()) {
+            for (i in appPermissions.indices) {
+                if (appPermissions[i] == permission.RECORD_AUDIO && grantResults[i] == PackageManager.PERMISSION_GRANTED) {
+                    log.d("Permission granted: ${appPermissions[i]}")
+                    //config.hasRecordAudioPermission = true
                 }
-                if (permissions[i] == permission.POST_NOTIFICATIONS && grantResults[i] == PackageManager.PERMISSION_GRANTED) {
-                    log.d("Permission granted: ${permissions[i]}")
-                    config.hasPostNotificationPermission = true
+                if (appPermissions[i] == permission.POST_NOTIFICATIONS && grantResults[i] == PackageManager.PERMISSION_GRANTED) {
+                    log.d("Permission granted: ${appPermissions[i]}")
+                    //config.hasPostNotificationPermission = true
                 }
-                if (permissions[i] == permission.WRITE_EXTERNAL_STORAGE && grantResults[i] == PackageManager.PERMISSION_GRANTED) {
-                    log.d("Permission granted: ${permissions[i]}")
-                    config.hasWriteExternalStoragePermission = true
+                if (appPermissions[i] == permission.WRITE_EXTERNAL_STORAGE && grantResults[i] == PackageManager.PERMISSION_GRANTED) {
+                    log.d("Permission granted: ${appPermissions[i]}")
+                    //config.hasWriteExternalStoragePermission = true
                 }
-                if (permissions[i] == permission.CAMERA && grantResults[i] == PackageManager.PERMISSION_GRANTED) {
-                    log.d("Permission granted: ${permissions[i]}")
-                    config.hasCameraPermission = true
+                if (appPermissions[i] == permission.CAMERA && grantResults[i] == PackageManager.PERMISSION_GRANTED) {
+                    log.d("Permission granted: ${appPermissions[i]}")
+                    //config.hasCameraPermission = true
                 }
             }
         }
-        if (hasPermissions()) {
+        updatePermissionStatus()
+        if (permissions.hasCorePermissions()) {
             log.d("Main permissions granted")
-            checkAndRequestWriteSettingsPermission()
+        }
+        checkAndRequestWriteSettingsPermission()
+        /*
         } else {
             log.d("Main permissions not granted will not run background tasks")
-            if (!config.hasRecordAudioPermission) {
+            if (!p.hasPermission(Permissions.RECORD_AUDIO)) {
                 log.d("Record audio permission not granted")
             }
-            if (!config.hasPostNotificationPermission) {
+            if (!p.hasPermission(Permissions.POST_NOTIFICATIONS)) {
                 log.d("Post notification permission not granted")
             }
             initialise()
         }
+
+         */
     }
 
     companion object {
@@ -725,6 +765,7 @@ class MainActivity : AppCompatActivity(), EventListener, ComponentCallbacks2 {
     }
 
     private val onWriteSettingsPermissionActivityResult = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+        updatePermissionStatus()
         checkAndRequestNotificationAccessPolicyPermission()
     }
 
@@ -758,7 +799,8 @@ class MainActivity : AppCompatActivity(), EventListener, ComponentCallbacks2 {
         if (it.resultCode == RESULT_CANCELED) {
             config.canSetNotificationPolicyAccess = false
         }
-        initialise()
+        updatePermissionStatus()
+        checkAndRequestDeviceAdminPermission()
     }
 
     private fun checkAndRequestNotificationAccessPolicyPermission() {
@@ -776,13 +818,30 @@ class MainActivity : AppCompatActivity(), EventListener, ComponentCallbacks2 {
                         onNotificationAccessPolicyPermissionActivityResult.launch(intent)
                     } catch (e: Exception) {
                         log.i("Device does not require explicit permission")
-                        initialise()
+                        checkAndRequestDeviceAdminPermission()
                     }
                 }
             }.create().show()
         } else {
             log.d("Notification access policy permission already granted or not supported")
             config.hasPostNotificationPermission = true
+            checkAndRequestDeviceAdminPermission()
+        }
+    }
+
+    private val onDeviceAdminPermissionActivityResult = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+        log.i("Device Admin permission result -> ${it.resultCode}")
+        updatePermissionStatus()
+        initialise()
+    }
+
+    private fun checkAndRequestDeviceAdminPermission() {
+        if (!permissions.isDeviceAdmin()) {
+            val intent = Intent(DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN)
+            intent.putExtra(DevicePolicyManager.EXTRA_DEVICE_ADMIN, ComponentName(this, VACADeviceAdminReceiver::class.java))
+            intent.putExtra(DevicePolicyManager.EXTRA_ADD_EXPLANATION, "This application requires Device Admin rights to be able to control the screen.")
+            onDeviceAdminPermissionActivityResult.launch(intent)
+        } else {
             initialise()
         }
     }
