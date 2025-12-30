@@ -4,6 +4,7 @@ import android.content.res.Configuration
 import android.os.Build
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -45,6 +46,7 @@ import com.msp1974.vacompanion.R
 import com.msp1974.vacompanion.ui.VAViewModel
 import com.msp1974.vacompanion.ui.components.InfoItem
 import com.msp1974.vacompanion.ui.components.LabelledSwitch
+import com.msp1974.vacompanion.ui.components.UUIDEditDialog
 import com.msp1974.vacompanion.ui.theme.AppTheme
 import com.msp1974.vacompanion.ui.theme.CustomColours
 
@@ -73,7 +75,7 @@ fun ConnectionScreen(vaViewModel: VAViewModel = viewModel()) {
                     verticalArrangement = Arrangement.Top,
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    LogoImage(orientation, vaViewModel::clearPairedDevice)
+                    LogoImage(orientation, vaViewModel::showClearPairedDeviceDialog)
                 }
                 Column (
                     modifier = Modifier
@@ -82,7 +84,7 @@ fun ConnectionScreen(vaViewModel: VAViewModel = viewModel()) {
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center
                 ) {
-                    InfoTextBlock(vaUiState.appInfo)
+                    InfoTextBlock(vaUiState.appInfo,  vaViewModel::showUUIDChangeDialog)
                     if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.Q) {
                         LaunchOnBootSwitch(vaUiState.launchOnBoot, callback = {
                             vaViewModel.launchOnBoot = it
@@ -118,19 +120,19 @@ fun ConnectionScreen(vaViewModel: VAViewModel = viewModel()) {
                                 modifier = Modifier.padding(top=30.dp),
                                 onClick = { vaViewModel.requestPermissions() }
                             )
-                        } else {
-                            PermissionStatusButton(
-                                text = "Permissions",
-                                colour = CustomColours.GREEN,
-                                modifier = Modifier.padding(top=30.dp),
-                                onClick = {}
-                            )
                         }
                     }
 
                 }
                 Column() {
                     StatusText(vaUiState.statusMessage)
+                }
+                if (vaUiState.showUUIDChangeDialog) {
+                    UUIDEditDialog(
+                        onDismissRequest = {vaViewModel.showUUIDChangeDialog(false)},
+                        onConfirmation = vaViewModel::setUUID,
+                        initText = vaUiState.appInfo["UUID"]!!
+                    )
                 }
             }
         }
@@ -146,7 +148,7 @@ fun ConnectionScreen(vaViewModel: VAViewModel = viewModel()) {
                             .padding(start = 10.dp),
                         verticalArrangement = Arrangement.Center,
                     ) {
-                        LogoImage(orientation, vaViewModel::clearPairedDevice)
+                        LogoImage(orientation, vaViewModel::showClearPairedDeviceDialog)
                     }
                     Column(
                         modifier = Modifier
@@ -188,7 +190,7 @@ fun ConnectionScreen(vaViewModel: VAViewModel = viewModel()) {
                                 verticalArrangement = Arrangement.Center,
                                 horizontalAlignment = Alignment.CenterHorizontally
                             ) {
-                                InfoTextBlock(vaUiState.appInfo)
+                                InfoTextBlock(vaUiState.appInfo, vaViewModel::showUUIDChangeDialog)
                                 if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.Q) {
                                     LaunchOnBootSwitch(vaUiState.launchOnBoot, callback = {
                                         vaViewModel.launchOnBoot = it
@@ -210,6 +212,13 @@ fun ConnectionScreen(vaViewModel: VAViewModel = viewModel()) {
             }
             Column() {
                 StatusText(vaUiState.statusMessage)
+            }
+            if (vaUiState.showUUIDChangeDialog) {
+                UUIDEditDialog(
+                    onDismissRequest = {vaViewModel.showUUIDChangeDialog(false)},
+                    onConfirmation = vaViewModel::setUUID,
+                    initText = vaUiState.appInfo["UUID"]!!
+                )
             }
         }
     }
@@ -239,8 +248,15 @@ fun LogoImage(orientation: Int, onLongPress: () -> Unit) {
 }
 
 @Composable
-fun InfoTextBlock(infoItems: Map<String, String>) {
-    Column(Modifier.width(280.dp).padding(16.dp)) {
+fun InfoTextBlock(infoItems: Map<String, String>, onClick: () -> Unit) {
+    Column(
+        modifier=Modifier
+            .width(280.dp)
+            .padding(16.dp)
+            .clickable {
+                onClick()
+            }
+    ) {
         infoItems.forEach { (label, value) ->
             InfoItem(label, value)
         }

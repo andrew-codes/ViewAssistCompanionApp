@@ -43,6 +43,7 @@ internal class Zeroconf(private val context: Context) {
             // with the name Android actually used.
             serviceName = nsdServiceInfo.serviceName
             isRegistered = true
+            Timber.d("Registered NSD service: $serviceName")
         }
 
         override fun onRegistrationFailed(serviceInfo: NsdServiceInfo, errorCode: Int) {
@@ -53,6 +54,7 @@ internal class Zeroconf(private val context: Context) {
         override fun onServiceUnregistered(arg0: NsdServiceInfo) {
             // Service has been unregistered. This only happens when you call
             // NsdManager.unregisterService() and pass in this listener.
+            Timber.d("Unregistered NSD service")
             isRegistered = false
         }
 
