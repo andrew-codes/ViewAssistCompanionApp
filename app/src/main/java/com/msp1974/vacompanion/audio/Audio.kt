@@ -9,6 +9,7 @@ import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.C.USAGE_NOTIFICATION
 import androidx.media3.common.MediaItem
+import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 
 internal class AudioManager(context: Context) {
@@ -41,15 +42,21 @@ internal class WakeWordSoundPlayer(private val context: Context, private val res
                     .build()
                 mediaPlayer.setAudioAttributes(audioAttributes, false)
                 mediaPlayer.setMediaItem(mediaItem)
+
+                mediaPlayer.addListener(object : Player.Listener {
+                    override fun onPlaybackStateChanged(playbackState: Int) {
+                        super.onPlaybackStateChanged(playbackState)
+                        if (playbackState == Player.STATE_ENDED) {
+                            mediaPlayer.release()
+                        }
+                    }
+                })
+
                 // Prepare the player.
                 mediaPlayer.prepare()
                 // Start the playback.
                 mediaPlayer.play()
             })
-            Handler(context.mainLooper).postDelayed({
-                mediaPlayer.release()
-            }, 5000)
-
         } catch (ex: Exception) {
             ex.printStackTrace()
         }
