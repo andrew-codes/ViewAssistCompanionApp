@@ -1,8 +1,10 @@
 package com.msp1974.vacompanion.utils
 
 import android.annotation.SuppressLint
+import android.app.Activity
 import android.content.DialogInterface
-import android.content.res.Configuration
+import android.content.Intent
+import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.net.http.SslError
 import android.os.Handler
@@ -25,13 +27,20 @@ import com.msp1974.vacompanion.settings.PageLoadingStage
 import com.msp1974.vacompanion.ui.VAViewModel
 import timber.log.Timber
 import java.net.URL
-
+import androidx.core.net.toUri
 
 class CustomWebViewClient(val viewModel: VAViewModel): WebViewClientCompat()  {
     val log = Logger()
     private val firebase = FirebaseManager.getInstance()
     val config = viewModel.config!!
     private val resources = viewModel.resources!!
+
+    companion object {
+
+        private const val APP_PREFIX = "app://"
+        private const val INTENT_PREFIX = "intent:"
+        private const val MARKET_PREFIX = "https://play.google.com/store/apps/details?id="
+    }
 
     override fun onRenderProcessGone(
         view: WebView,
@@ -55,22 +64,73 @@ class CustomWebViewClient(val viewModel: VAViewModel): WebViewClientCompat()  {
 
     @Deprecated("Deprecated in Java")
     override fun shouldOverrideUrlLoading(view: WebView, url: String): Boolean {
-        // If the url is our client id then capture the auth code and get an access token
-        if (url.contains(AuthUtils.CLIENT_URL)) {
-            val authCode = AuthUtils.getReturnAuthCode(url)
-            if (authCode != "") {
-                // Get access token using auth token
-                val auth = AuthUtils.authoriseWithAuthCode(AuthUtils.getHAUrl(config), authCode, !config.ignoreSSLErrors)
-                if (auth.accessToken == "") {
-                    // Not authorised.  Send back to login screen
-                    view.loadUrl(AuthUtils.getAuthUrl(AuthUtils.getHAUrl(config)))
+        url?.let {
+            try {
+                val pm: PackageManager = config.context.packageManager
+                val activityContext = config.context.takeIf { it is Activity } ?: return false
+
+                // If the url is our client id then capture the auth code and get an access token
+                if (it.contains(AuthUtils.CLIENT_URL)) {
+                    val authCode = AuthUtils.getReturnAuthCode(url)
+                    if (authCode != "") {
+                        // Get access token using auth token
+                        val auth = AuthUtils.authoriseWithAuthCode(AuthUtils.getHAUrl(config), authCode, !config.ignoreSSLErrors)
+                        if (auth.accessToken == "") {
+                            // Not authorised.  Send back to login screen
+                            view.loadUrl(AuthUtils.getAuthUrl(AuthUtils.getHAUrl(config)))
+                        } else {
+                            // Authorised. Load HA default dashboard
+                            config.accessToken = auth.accessToken
+                            config.refreshToken = auth.refreshToken
+                            config.tokenExpiry = auth.expires
+                            view.loadUrl(AuthUtils.getURL(AuthUtils.getHAUrl(config)))
+                        }
+                    }
+                } else if (it.startsWith(APP_PREFIX)) {
+                    Timber.d("Launching the app")
+                    val intent = pm.getLaunchIntentForPackage(
+                        it.substringAfter(APP_PREFIX),
+                    )
+                    if (intent != null) {
+                        intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                        activityContext.startActivity(intent)
+                    } else {
+                        Timber.w("No intent to launch app found, opening app store")
+                        val marketIntent = Intent(Intent.ACTION_VIEW)
+                        marketIntent.data =
+                            (MARKET_PREFIX + it.substringAfter(APP_PREFIX)).toUri()
+                        activityContext.startActivity(marketIntent)
+                    }
+                    return true
+                } else if (it.startsWith(INTENT_PREFIX)) {
+                    Timber.d("Launching the intent")
+                    val intent =
+                        Intent.parseUri(it, Intent.URI_INTENT_SCHEME)
+                    val intentPackage = intent.`package`?.let { it1 ->
+                        pm.getLaunchIntentForPackage(
+                            it1,
+                        )
+                    }
+                    if (intentPackage == null && !intent.`package`.isNullOrEmpty()) {
+                        Timber.w("No app found for intent prefix, opening app store")
+                        val marketIntent = Intent(Intent.ACTION_VIEW)
+                        marketIntent.data =
+                            (MARKET_PREFIX + intent.`package`.toString()).toUri()
+                        activityContext.startActivity(marketIntent)
+                    } else {
+                        activityContext.startActivity(intent)
+                    }
+                    return true
+                } else if (!it.toString().contains(it)) {
+                    Timber.d("Launching browser")
+                    val browserIntent = Intent(Intent.ACTION_VIEW, it.toUri())
+                    activityContext.startActivity(browserIntent)
+                    return true
                 } else {
-                    // Authorised. Load HA default dashboard
-                    config.accessToken = auth.accessToken
-                    config.refreshToken = auth.refreshToken
-                    config.tokenExpiry = auth.expires
-                    view.loadUrl(AuthUtils.getURL(AuthUtils.getHAUrl(config)))
+                    // Do nothing.
                 }
+            } catch (e: Exception) {
+                Timber.e(e, "Unable to override the URL")
             }
         }
         return true
