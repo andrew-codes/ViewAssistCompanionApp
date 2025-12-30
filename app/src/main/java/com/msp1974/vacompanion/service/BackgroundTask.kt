@@ -141,6 +141,13 @@ internal class BackgroundTaskController (private val context: Context): EventLis
                 setDoNotDisturb(event.newValue as Boolean)
                 server.sendSetting("do_not_disturb", event.newValue)
             }
+            "restartZeroconf" -> {
+                zeroConf.unregisterService()
+                scope.launch {
+                    delay(2000)
+                    zeroConf.registerService(config.serverPort)
+                }
+            }
             "pairedDeviceID" -> {
                 if (config.pairedDeviceID != "") {
                     Timber.d("Device paired, stopping Zeroconf")

@@ -38,6 +38,7 @@ data class State(
     var permissions: PermissionsStatus = PermissionsStatus(),
     var updates: UpdateStatus = UpdateStatus(),
     var webViewPageLoadingStage: PageLoadingStage = PageLoadingStage.NOT_STARTED,
+    var showUUIDChangeDialog: Boolean = false
     )
 
 class VAViewModel: ViewModel(), EventListener {
@@ -234,24 +235,45 @@ class VAViewModel: ViewModel(), EventListener {
         }
     }
 
-    fun clearPairedDevice() {
+    fun showClearPairedDeviceDialog() {
         val d = VADialog(
             title = "Clear Paired Device Entry",
             message = "This will delete the currently paired Home Assistant server and allow another server to connect and pair to this device.",
             confirmText = "Confirm",
             dismissText = "Cancel",
             confirmCallback = {
-                config!!.pairedDeviceID = ""
-                config!!.accessToken = ""
-                config!!.refreshToken = ""
-                config!!.tokenExpiry = 0
+                clearPairedDevice()
             },
             dismissCallback = {}
         )
         showUpdateDialog(d)
     }
 
+    private fun clearPairedDevice() {
+        config!!.pairedDeviceID = ""
+        config!!.accessToken = ""
+        config!!.refreshToken = ""
+        config!!.tokenExpiry = 0
+    }
 
+    fun showUUIDChangeDialog(show: Boolean = true) {
+        _vacaState.update { currentState ->
+            currentState.copy(
+                showUUIDChangeDialog = show
+            )
+        }
+    }
+
+    fun setUUID(uuid: String = "") {
+        // TODO: Add validation
+        if (uuid != "" && uuid != config!!.uuid) {
+            config!!.uuid = uuid
+            showUUIDChangeDialog(false)
+            clearPairedDevice()
+            buildAppInfo()
+            config!!.eventBroadcaster.notifyEvent(Event("restartZeroconf", "", ""))
+        }
+    }
 }
 
 class VADialog(
