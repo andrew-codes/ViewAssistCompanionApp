@@ -205,6 +205,10 @@ class APPConfig(val context: Context) {
         onValueChangedListener(property, oldValue, newValue)
     }
 
+    var bumpSensitivity: Float by Delegates.observable(0.1f) { property, oldValue, newValue ->
+        onValueChangedListener(property, oldValue, newValue)
+    }
+
 
 
     // SharedPreferences
@@ -339,6 +343,9 @@ class APPConfig(val context: Context) {
         }
         if (settings.has("screen_timeout")) {
             screenTimeout = settings.getInt("screen_timeout") * 1000
+        }
+        if (settings.has("bump_sensitivity")) {
+            bumpSensitivity = settings.getInt("bump_sensitivity").toFloat() / 100
         }
         Firebase.crashlytics.log("Settings update")
     }
