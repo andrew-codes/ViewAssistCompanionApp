@@ -374,17 +374,20 @@ class MainActivity : AppCompatActivity(), EventListener, ComponentCallbacks2 {
             override fun onLost(network: Network) {
                 log.e("Lost network connection")
                 hasNetwork = false
-                viewModel.onNetworkStateChange()
-
-                val delay = 10
-                setStatus(getString(R.string.status_waiting_for_network))
-                if (config.enableNetworkRecovery) {
-                    log.d("Disabling wifi for ${delay}s")
-                    Helpers.enableWifi(this@MainActivity, false)
-                    Handler(Looper.getMainLooper()).postDelayed({
-                        log.d("Enabling wifi")
-                        Helpers.enableWifi(this@MainActivity, true)
-                    }, (delay * 1000).toLong())
+                lifecycleScope.launch {
+                    delay(10000)
+                    if (!hasNetwork) {
+                        viewModel.onNetworkStateChange()
+                        setStatus(getString(R.string.status_waiting_for_network))
+                        if (config.enableNetworkRecovery) {
+                            val delaySecs = 10
+                            log.d("Disabling wifi for ${delaySecs}s")
+                            Helpers.enableWifi(this@MainActivity, false)
+                            delay(delaySecs.toLong() * 1000)
+                            log.d("Enabling wifi")
+                            Helpers.enableWifi(this@MainActivity, true)
+                        }
+                    }
                 }
             }
         })
