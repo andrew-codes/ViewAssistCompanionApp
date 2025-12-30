@@ -7,23 +7,13 @@ import kotlin.math.pow
 
 class AudioDSP {
 
-    fun autoGain(audioBuffer: ShortArray, sensitivity: Int = 0): ShortArray {
-        val max = audioBuffer.maxOrNull() ?: 0
-        val min = audioBuffer.minOrNull() ?: 0
-        val range = max - min
-        val gain = (20000f + (sensitivity * 1000)) / range
-
-        if (gain != 1f) {
-            val output = audioBuffer.map { (it * gain).toInt().toShort() }.toShortArray()
-            return output
-        }
-        return audioBuffer
-    }
-
     fun autoGain(audioBuffer: FloatArray, sensitivity: Int = 0): FloatArray {
         val max = audioBuffer.maxOrNull() ?: 0f
         val min = audioBuffer.minOrNull() ?: 0f
         val range = max - min
+
+        if (range < 0.01f) return audioBuffer
+
         val gain = (0.61f + (sensitivity * 0.03f)) / range
 
         if (gain != 1f) {
@@ -82,6 +72,8 @@ class AudioDSP {
         }
         return byteBuffer
     }
+
+
 }
 
 class LowPassSPFilter: IIRFilter {

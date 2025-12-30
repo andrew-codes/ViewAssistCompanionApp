@@ -14,8 +14,6 @@ import kotlinx.coroutines.isActive
 import android.content.Context
 import kotlin.coroutines.coroutineContext
 import android.annotation.SuppressLint
-import kotlinx.coroutines.NonCancellable
-import kotlinx.coroutines.withContext
 
 /**
  * Handles audio recording from device microphone.
@@ -24,7 +22,6 @@ import kotlinx.coroutines.withContext
 internal class AudioRecorder(
     private val context: Context
 ) {
-
     companion object {
         const val SAMPLE_RATE = 16000
         const val CHANNEL_CONFIG = AudioFormat.CHANNEL_IN_MONO
