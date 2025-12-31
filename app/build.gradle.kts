@@ -14,19 +14,46 @@ android {
         applicationId = "com.msp1974.vacompanion"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.4.0"
+        versionCode = 6
+        versionName = "0.9.5"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         setProperty("archivesBaseName", "vaca-$versionName")
     }
 
+    signingConfigs {
+        create("release") {
+            // Keep the keystore outside the repo. Path provided by user: ~/developer/keys/android
+            storeFile = file("${System.getProperty("user.home")}/developer/keys/android/vaca-release.jks")
+            // Put these in ~/.gradle/gradle.properties (recommended) so they are not committed:
+            // VACA_KEYSTORE_PASSWORD=...
+            // VACA_KEY_PASSWORD=...
+            // Optionally override alias with VACA_KEY_ALIAS, otherwise defaults to "vaca"
+            storePassword = providers.gradleProperty("VACA_KEYSTORE_PASSWORD").get()
+            keyAlias = providers.gradleProperty("VACA_KEY_ALIAS").orElse("vaca").get()
+            keyPassword = providers.gradleProperty("VACA_KEY_PASSWORD").get()
+        }
+    }
+
     buildTypes {
+        applicationVariants.all {
+            this.outputs
+                .map { it as com.android.build.gradle.internal.api.ApkVariantOutputImpl }
+                .forEach { output ->
+                    var apkName = "vaca-${versionName}-${this.buildType.name}.apk"
+                    output.outputFileName = apkName
+                }
+        }
+        debug {
+            isMinifyEnabled = false
+        }
         release {
+            isDebuggable = false
             isMinifyEnabled = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            signingConfig = signingConfigs.getByName("release")
         }
     }
     compileOptions {
