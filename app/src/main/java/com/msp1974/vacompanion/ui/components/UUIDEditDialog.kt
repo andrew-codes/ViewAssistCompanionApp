@@ -68,7 +68,7 @@ fun UUIDEditDialog(
                         .padding(16.dp),
                 )
                 Text(
-                    text = "WARNING: Changing the UUID will unpair the device and require to be setup in Home Assistant again.",
+                    text = "WARNING: Changing the UUID will unpair the device and require the VACA and View Assist entries to be deleted and readded.",
                     fontSize = 12.sp,
                     modifier = Modifier
                         .padding(16.dp),
@@ -79,8 +79,11 @@ fun UUIDEditDialog(
                         .padding(16.dp),
                     state = uuid,
                     label = { Text("UUID") },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text, showKeyboardOnFocus = true),
-                    inputTransformation = InputTransformation.maxLength(16)
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Password,
+                        imeAction = androidx.compose.ui.text.input.ImeAction.Done,
+                    ),
+                    inputTransformation = InputTransformation.maxLength(32)
                         .then(CustomInputTransformation()),
                 )
                 Row(
