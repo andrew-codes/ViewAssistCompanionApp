@@ -17,11 +17,11 @@ interface ViewAssistCallback {
 }
 
 /** Instantiate the interface and set the context.  */
-class WebAppInterface(val uuid: String, val cbCallback: ViewAssistCallback) {
+class WebAppInterface(val config: APPConfig, val cbCallback: ViewAssistCallback) {
 
     @JavascriptInterface
     fun getViewAssistCAUUID(): String {
-        return uuid
+        return config.uuid
     }
 
     @JavascriptInterface

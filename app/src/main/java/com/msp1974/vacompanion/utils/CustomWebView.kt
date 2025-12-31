@@ -73,7 +73,7 @@ class CustomWebView @JvmOverloads constructor(
         addJavascriptInterface(androidInterface, "Android")
         if (webViewClient::class == CustomWebViewClient::class) {
             val webViewClientA = webViewClient as CustomWebViewClient
-            addJavascriptInterface(WebAppInterface(webViewClientA.config.uuid, ViewAssistEventHandler), "ViewAssistApp")
+            addJavascriptInterface(WebAppInterface(webViewClientA.config, ViewAssistEventHandler), "ViewAssistApp")
             addJavascriptInterface(WebViewJavascriptInterface(this, AuthUtils(config).externalAuthCallback), "externalApp")
         }
 
