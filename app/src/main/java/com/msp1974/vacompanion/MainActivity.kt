@@ -26,6 +26,7 @@ import android.os.StrictMode
 import android.provider.Settings
 import android.view.KeyEvent
 import android.view.ViewGroup
+import android.webkit.WebView
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.compose.setContent
@@ -109,6 +110,11 @@ class MainActivity : AppCompatActivity(), EventListener, ComponentCallbacks2 {
     @SuppressLint("HardwareIds", "SetTextI18n")
     override fun onCreate(savedInstanceState: Bundle?) {
 
+        config = APPConfig.getInstance(this)
+        screen = ScreenUtils(this)
+        updater = Updater(this)
+        permissions = Permissions(this)
+
         viewModel.bind(APPConfig.getInstance(this),resources)
 
         val splashscreen = installSplashScreen()
@@ -118,11 +124,6 @@ class MainActivity : AppCompatActivity(), EventListener, ComponentCallbacks2 {
         enableEdgeToEdge()
 
         splashscreen.setKeepOnScreenCondition { keepSplashScreen }
-
-        config = APPConfig.getInstance(this)
-        screen = ScreenUtils(this)
-        updater = Updater(this)
-        permissions = Permissions(this)
 
         screenOrientation = resources.configuration.orientation
 
@@ -145,26 +146,19 @@ class MainActivity : AppCompatActivity(), EventListener, ComponentCallbacks2 {
         setStatus(getString(R.string.status_initialising))
         keepSplashScreen = false
 
-        registerWifiMonitor()
-
-        // Init webview setup
-        initWebView()
-
-        // Hide system bars
-        screen.hideSystemUI(window)
-
         // Wake screen on boot if off - keep black.
         if (!screen.isScreenOn()  && screen.isScreenOff()) {
             Timber.i("Performing screen off startup....")
             screenOffStartUp = true
-            screenWake(true)
         } else {
-            // Set screen timeout to 10m during loading
-            // It will get reset on start satellite
+            screenOffStartUp = false
             Timber.i("Performing screen on startup....")
-            screenWake()
-            screen.setScreenAlwaysOn(window, true)
         }
+
+        setScreenSettings()
+
+        // Init webview setup
+        initWebView()
 
         setContent {
             val vaUiState by viewModel.vacaState.collectAsState()
@@ -207,8 +201,6 @@ class MainActivity : AppCompatActivity(), EventListener, ComponentCallbacks2 {
             }
         }
 
-
-
         // Check and get required user permissions
         log.d("Checking permissions")
         updatePermissionStatus()
@@ -217,12 +209,49 @@ class MainActivity : AppCompatActivity(), EventListener, ComponentCallbacks2 {
             LocalBroadcastManager.getInstance(this).registerReceiver(satelliteBroadcastReceiver, IntentFilter().apply {
                 addAction(BroadcastSender.REQUEST_MISSING_PERMISSIONS)
             })
+
+            // Turn on screen for startup to show permission request
+            screenOffStartUp = false
+
+            setScreenSettings()
             checkAndRequestPermissions()
         } else {
             log.d("All permissions already granted")
             initialise()
         }
 
+    }
+
+    fun setScreenSettings() {
+        // Hide system bars
+        Timber.d("Setting screen settings")
+        screen.hideSystemUI(window)
+
+        if (!initialised) {
+            // Set screen for loading
+            screen.setScreenAlwaysOn(window, true)
+
+            if (screenOffStartUp) {
+                config.screenBrightness = screen.getScreenBrightness()
+                screen.setScreenAutoBrightness(window, false)
+                screen.setScreenBrightness(window, 0.01f)
+                viewModel.setScreenBlank(true)
+                screenWake()
+            } else {
+                if (config.screenBrightness <= 0.3) config.screenBrightness = 0.6f
+                screen.setScreenBrightness(window, config.screenBrightness)
+
+                config.screenTimeout = screen.getScreenTimeout()
+                if (config.screenTimeout < 15000) config.screenTimeout = 15000
+                screen.setScreenTimeout(config.screenTimeout)
+                viewModel.setScreenBlank(false)
+            }
+        } else if (viewModel.vacaState.value.satelliteRunning) {
+            screen.setScreenBrightness(window, config.screenBrightness)
+            screen.setScreenAutoBrightness(window, config.screenAutoBrightness)
+            screen.setScreenTimeout(config.screenTimeout)
+            screen.setScreenAlwaysOn(window, config.screenAlwaysOn)
+        }
     }
 
     fun initWebView() {
@@ -252,18 +281,35 @@ class MainActivity : AppCompatActivity(), EventListener, ComponentCallbacks2 {
     }
 
     fun initialise() {
+        lifecycleScope.launch {
+            initialiseApp()
+        }
+    }
+
+    suspend fun initialiseApp() {
+        Timber.d("Initialising.....")
         if (!viewModel.vacaState.value.permissions.hasCorePermissions) {
             setStatus(getString(R.string.status_no_permissions))
+            Timber.w("No Permissions")
             viewModel.setScreenBlank(false)
+            screenWake()
             return
         }
-        if (!hasNetwork) {
+        Timber.d("Permissions OK")
+        hasNetwork = Helpers.isNetworkAvailable(this)
+        while (!hasNetwork) {
             setStatus(getString(R.string.status_waiting_for_network))
-            Handler(Looper.getMainLooper()).postDelayed({
-                initialise()
-            }, 1000)
-            return
+            Timber.w("No Network...")
+            delay(1000)
+            hasNetwork = Helpers.isNetworkAvailable(this)
         }
+        Timber.d("Network active")
+
+        while (!screen.isScreenOn()) {
+            Timber.d("Waiting for screen on...")
+            delay(1000)
+        }
+        Timber.d("Screen on")
 
         if (initialised) return
 
@@ -291,10 +337,10 @@ class MainActivity : AppCompatActivity(), EventListener, ComponentCallbacks2 {
         config.eventBroadcaster.addListener(this)
         config.currentActivity = "Main"
 
+        registerWifiMonitor()
+
         // Start background tasks
         runBackgroundTasks()
-
-        initialised = true
     }
 
     // Initiate wake word broadcast receiver
@@ -304,16 +350,6 @@ class MainActivity : AppCompatActivity(), EventListener, ComponentCallbacks2 {
             when (intent.action) {
                 BroadcastSender.SATELLITE_STARTED -> {
                     viewModel.setSatelliteRunning(true)
-                    if (!screen.isScreenOn()) {
-                        screenOffStartUp = true
-                        if (config.screenAlwaysOn) {
-                            screenWake(blackOut = false)
-                        } else {
-                            screenWake(blackOut = true)
-                        }
-                    }
-
-                    screen.setScreenTimeout(config.screenTimeout)
                     webView.setZoomLevel(config.zoomLevel)
                     config.screenOn = screen.isScreenOn()
                     val url = AuthUtils.getURL(AuthUtils.getHAUrl(config))
@@ -339,15 +375,13 @@ class MainActivity : AppCompatActivity(), EventListener, ComponentCallbacks2 {
                     webView.loadUrl(url)
                 }
                 Intent.ACTION_SCREEN_ON -> {
-                    if (!screenOffStartUp) {
-                        viewModel.setScreenBlank(false)
+                    if (initialised) {
                         // If woken by hardware buttons set screen config
                         setScreenSettings()
                     }
                     config.screenOn = true
                 }
                 Intent.ACTION_SCREEN_OFF -> {
-                    viewModel.setScreenBlank(false)
                     config.screenOn = false
                 }
                 NotificationManager.ACTION_INTERRUPTION_FILTER_CHANGED -> {
@@ -363,6 +397,7 @@ class MainActivity : AppCompatActivity(), EventListener, ComponentCallbacks2 {
 
     fun registerWifiMonitor() {
         val connectivityManager = getSystemService(CONNECTIVITY_SERVICE) as ConnectivityManager
+        Timber.d("Registering Wifi monitor")
         connectivityManager.registerDefaultNetworkCallback(object : ConnectivityManager.NetworkCallback() {
             override fun onAvailable(network: Network) {
                 log.i("Network connection available")
@@ -401,7 +436,7 @@ class MainActivity : AppCompatActivity(), EventListener, ComponentCallbacks2 {
         if (config.hasWriteExternalStoragePermission && updateProcessComplete) {
             updateProcessComplete = false
             setStatus(getString(R.string.status_checking_for_update))
-            thread(name = "Updater thread") {
+            lifecycleScope.launch {
                 checkForUpdate()
             }
         } else {
@@ -423,10 +458,11 @@ class MainActivity : AppCompatActivity(), EventListener, ComponentCallbacks2 {
         // Catch if background tasks not running
         if (initialised && Helpers.isNetworkAvailable(this) && config.backgroundTaskStatus == BackgroundTaskStatus.NOT_STARTED ) {
             log.e("Background task starting on resume as is is not running")
-            runBackgroundTasks()
+            lifecycleScope.launch {
+                runBackgroundTasks()
+            }
         }
-        screen.hideSystemUI(window)
-        screen.setScreenAlwaysOn(window, config.screenAlwaysOn)
+        setScreenSettings()
     }
 
     override fun onDestroy() {
@@ -443,7 +479,7 @@ class MainActivity : AppCompatActivity(), EventListener, ComponentCallbacks2 {
         return super.onKeyDown(keyCode, event)
     }
 
-    private fun runBackgroundTasks() {
+    private suspend fun runBackgroundTasks() {
         if ( config.backgroundTaskStatus != BackgroundTaskStatus.NOT_STARTED ) {
             log.w("Background task already running.  Not starting from MainActivity")
             firebase.logEvent(FirebaseManager.MAIN_ACTIVITY_BACKGROUND_TASK_ALREADY_RUNNING, mapOf())
@@ -461,9 +497,8 @@ class MainActivity : AppCompatActivity(), EventListener, ComponentCallbacks2 {
         config.backgroundTaskStatus = BackgroundTaskStatus.STARTING
 
         if (!updateProcessComplete) {
-            Handler(Looper.getMainLooper()).postDelayed({
-                runBackgroundTasks()
-            }, 1000)
+            delay(1000)
+            runUpdateRoutine()
             return
         }
         log.d("Starting background tasks")
@@ -475,19 +510,17 @@ class MainActivity : AppCompatActivity(), EventListener, ComponentCallbacks2 {
             }
         } catch (ex: Exception) {
             log.w("Error starting background tasks - ${ex.message}")
-            log.w("Waking screen to allow background tasks to start")
             config.backgroundTaskStatus = BackgroundTaskStatus.NOT_STARTED
-            screenWake(true)
-            screenSleep()
         }
 
-        // Reset screenOffStartup
         if (screenOffStartUp) {
-            screenOffStartUp = false
+            delay(2000)
             screenSleep()
-        } else {
-            screenWake(false)
+            screenOffStartUp = false
         }
+        setScreenSettings()
+        initialised = true
+        Timber.d("Initialised")
     }
 
     override fun onEventTriggered(event: Event) {
@@ -497,9 +530,9 @@ class MainActivity : AppCompatActivity(), EventListener, ComponentCallbacks2 {
                 when (event.eventName) {
                     "screenAlwaysOn" -> {
                         val enabled = event.newValue as Boolean
-                        if (enabled) {
-                            screenWake()
-                        }
+                        //if (enabled) {
+                            //screenWake()
+                        //}
                         screen.setScreenAlwaysOn(window, enabled)
                     }
                     "screenAutoBrightness" -> {
@@ -529,8 +562,7 @@ class MainActivity : AppCompatActivity(), EventListener, ComponentCallbacks2 {
                 "zoomLevel" -> webView.setZoomLevel(event.newValue as Int)
                 "darkMode" -> setDarkMode(event.newValue as Boolean)
                 "refresh" -> webView.reload()
-                "screenWake" -> screenWake(false)
-                "screenWakeBlackout" -> screenWake(true)
+                "screenWake" -> screenWake()
                 "screenSleep" -> screenSleep()
                 "deviceBump" -> if (config.screenOnBump) screenWake()
                 "proximity" -> if (config.screenOnProximity && event.newValue as Float == 0f) screenWake()
@@ -553,39 +585,21 @@ class MainActivity : AppCompatActivity(), EventListener, ComponentCallbacks2 {
         if (config.screenOnMotion) screenWake()
     }
 
-    fun setScreenSettings() {
-        if (viewModel.vacaState.value.satelliteRunning) {
-            screen.setScreenBrightness(window, config.screenBrightness)
-            screen.setScreenAutoBrightness(window, config.screenAutoBrightness)
-            screen.setScreenTimeout(config.screenTimeout)
-            screen.setScreenAlwaysOn(window, config.screenAlwaysOn)
-        }
-    }
 
-    fun screenWake(blackOut: Boolean = false) {
-        Timber.d("Wake screen. Blackout = $blackOut")
+
+    fun screenWake() {
+        Timber.d("Wake screen")
         // Cancel any screen sleep timer
         if (screenSleepWaitJob != null && screenSleepWaitJob!!.isActive) {
             screenSleepWaitJob!!.cancel()
         }
-
-        viewModel.setScreenBlank(blackOut)
-
-        if (blackOut) {
-            screen.setScreenBrightness(window, 0.01f)
-            screen.setScreenAutoBrightness(window, false)
-            screen.setScreenTimeout(1000)
-        } else {
-            setScreenSettings()
-        }
-
         screen.wakeScreen()
-        config.screenOn = true
     }
 
     fun screenSleep() {
         Timber.d("Sleeping screen")
         if (permissions.isDeviceAdmin()) {
+            screen.setPartialWakeLock()
             lockScreen()
             return
         }
