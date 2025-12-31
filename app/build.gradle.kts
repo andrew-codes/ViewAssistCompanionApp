@@ -14,8 +14,8 @@ android {
         applicationId = "com.msp1974.vacompanion"
         minSdk = 26
         targetSdk = 36
-        versionCode = 6
-        versionName = "0.9.5"
+        versionCode = 7
+        versionName = "0.9.6"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         setProperty("archivesBaseName", "vaca-$versionName")
     }
