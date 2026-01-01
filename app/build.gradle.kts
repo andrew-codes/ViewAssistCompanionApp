@@ -11,12 +11,21 @@ android {
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.msp1974.vacompanion"
+        applicationId = "codes.andrew.vacompanion"
         minSdk = 26
         targetSdk = 36
         versionCode = 1
         versionName = "0.8.2"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    signingConfigs {
+        create("release") {
+            storeFile = file(System.getenv("KEYSTORE_FILE") ?: "release.keystore")
+            storePassword = System.getenv("KEYSTORE_PASSWORD")
+            keyAlias = System.getenv("KEY_ALIAS")
+            keyPassword = System.getenv("KEY_PASSWORD")
+        }
     }
 
     buildTypes {
@@ -32,12 +41,13 @@ android {
             isMinifyEnabled = false
         }
         release {
+            isDebuggable = false
             isMinifyEnabled = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName("release")
         }
     }
     compileOptions {
