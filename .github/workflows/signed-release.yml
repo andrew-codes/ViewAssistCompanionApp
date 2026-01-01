@@ -1,4 +1,4 @@
-name: Build Signed Release
+name: Build, Signed, Publish
 
 on:
   workflow_dispatch:
@@ -13,7 +13,7 @@ on:
           - major
 
 jobs:
-  build:
+  build_and_release:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout sources
@@ -116,3 +116,14 @@ jobs:
           prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish to Google Play
+        uses: r0adkll/upload-google-play@v1
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
+          packageName: codes.andrew.vacompanion
+          releaseFiles: app/build/outputs/bundle/release/*.aab
+          track: internal
+          releaseName: ${{ steps.calc_version.outputs.tag }}
+          status: completed
+          inAppUpdatePriority: 2
