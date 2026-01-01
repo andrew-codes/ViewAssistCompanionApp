@@ -1,3 +1,6 @@
+# LLVM / Clang profiling
+*.profraw
+*.profdata
 # Built application files
 *.apk
 *.aar
