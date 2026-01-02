@@ -121,7 +121,7 @@ jobs:
         uses: r0adkll/upload-google-play@v1
         with:
           serviceAccountJsonPlainText: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
-          packageName: codes.andrew.vacompanion
+          packageName: codes.andrew.vaca
           releaseFiles: app/build/outputs/bundle/release/*.aab
           track: internal
           releaseName: ${{ steps.calc_version.outputs.tag }}

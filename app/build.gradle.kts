@@ -11,7 +11,7 @@ android {
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "codes.andrew.vacompanion"
+        applicationId = "codes.andrew.vaca"
         minSdk = 26
         targetSdk = 36
         versionCode = 6
