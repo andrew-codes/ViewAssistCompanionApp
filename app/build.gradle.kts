@@ -14,8 +14,8 @@ android {
         applicationId = "codes.andrew.vaca"
         minSdk = 26
         targetSdk = 36
-        versionCode = 6
-        versionName = "0.8.7"
+        versionCode = 7
+        versionName = "0.8.8"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
