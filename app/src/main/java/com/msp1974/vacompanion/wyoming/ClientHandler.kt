@@ -342,6 +342,7 @@ class ClientHandler(private val context: Context, private val server: WyomingTCP
                     }
 
                     "error" -> {
+                        config.eventBroadcaster.notifyEvent(Event("recognitionError", "", ""))
                         resetPipeline()
                     }
 
