@@ -5,10 +5,11 @@ import android.content.Context
 import android.content.Context.NOTIFICATION_SERVICE
 import android.content.res.AssetManager
 import android.media.AudioManager
+import com.msp1974.vacompanion.R
 import com.msp1974.vacompanion.wyoming.Zeroconf
 import com.msp1974.vacompanion.audio.AudioDSP
+import com.msp1974.vacompanion.audio.SoundClipPlayer
 import com.msp1974.vacompanion.audio.AudioManager as AudManager
-import com.msp1974.vacompanion.audio.WakeWordSoundPlayer
 import com.msp1974.vacompanion.broadcasts.BroadcastSender
 import com.msp1974.vacompanion.sensors.SensorUpdatesCallback
 import com.msp1974.vacompanion.sensors.Sensors
@@ -134,7 +135,23 @@ internal class BackgroundTaskController (private val context: Context): EventLis
             }
             "wakeWord" -> {
                 scope.launch {
-                    restartWakeWordDetection()
+                    if (wakeWordJob != null && wakeWordJob!!.isActive) {
+                        restartWakeWordDetection()
+                    } else if (server.pipelineClient != null) {
+                        startOpenWakeWordDetection()
+                    }
+                }
+            }
+            "recognitionError" -> {
+                if (config.wakeWordSound != "none") {
+                    try {
+                        SoundClipPlayer(
+                            context,
+                            R.raw.error
+                        ).play()
+                    } catch (e: Exception) {
+                        Timber.e("Error playing wake word sound: ${e.message.toString()}")
+                    }
                 }
             }
             "doNotDisturb" -> {
@@ -250,7 +267,8 @@ internal class BackgroundTaskController (private val context: Context): EventLis
         val audioRecorder = AudioRecorder(context)
         if (audioRecorder.hasRecordPermission()) {
             audioInJob = scope.launch {
-                audioRecorder.startRecording()
+                val experimentalMicBoost = true
+                audioRecorder.startRecording(enableMicBoost = experimentalMicBoost)
                     .collect { audioBuffer ->
                         var audioLevel = 0f
 
@@ -264,13 +282,15 @@ internal class BackgroundTaskController (private val context: Context): EventLis
                                 }
 
                                 AudioRouteOption.STREAM -> {
-                                    val gAudioBuffer =
-                                        audioDSP.autoGain(audioBuffer, config.micGain)
-                                    val bAudioBuffer = audioDSP.floatArrayToByteBuffer(gAudioBuffer)
-                                    server.sendAudio(bAudioBuffer)
-                                    audioLevel = gAudioBuffer.max()
+                                    if (experimentalMicBoost) {
+                                        server.sendAudio(audioDSP.floatArrayToByteBuffer(audioBuffer))
+                                    } else {
+                                        val gAudioBuffer = audioDSP.autoGain(audioBuffer, config.micGain)
+                                        val bAudioBuffer = audioDSP.floatArrayToByteBuffer(gAudioBuffer)
+                                        server.sendAudio(bAudioBuffer)
+                                    }
+                                    audioLevel = audioBuffer.max()
                                 }
-
                                 else -> {}
                             }
                         }
@@ -324,6 +344,11 @@ internal class BackgroundTaskController (private val context: Context): EventLis
             return
         }
 
+        if (wakeWordEngine != null && wakeWordJob!!.isActive) {
+            stopOpenWakeWordDetection()
+        }
+
+
         val wakeWords = WakeWords(context).getWakeWords()
         if (config.wakeWord in wakeWords.keys) {
             val wakeWordInfo = wakeWords[config.wakeWord]!!
@@ -359,7 +384,7 @@ internal class BackgroundTaskController (private val context: Context): EventLis
 
                         if (config.wakeWordSound != "none") {
                             try {
-                                WakeWordSoundPlayer(
+                                SoundClipPlayer(
                                     context,
                                     context.resources.getIdentifier(
                                         config.wakeWordSound,
@@ -399,9 +424,11 @@ internal class BackgroundTaskController (private val context: Context): EventLis
     }
 
     private fun restartWakeWordDetection() {
-        Timber.i("Restarting wake word detection")
-        stopOpenWakeWordDetection()
-        startOpenWakeWordDetection()
+        if (wakeWordJob != null && wakeWordJob!!.isActive) {
+            Timber.i("Restarting wake word detection")
+            stopOpenWakeWordDetection()
+            startOpenWakeWordDetection()
+        }
     }
 
 
