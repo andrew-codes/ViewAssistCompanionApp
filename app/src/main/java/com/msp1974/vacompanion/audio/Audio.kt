@@ -28,7 +28,7 @@ internal class AudioManager(context: Context) {
     }
 }
 
-internal class WakeWordSoundPlayer(private val context: Context, private val resId: Int) {
+internal class SoundClipPlayer(private val context: Context, private val resId: Int) {
     private lateinit var mediaPlayer: ExoPlayer
 
     fun play() {
