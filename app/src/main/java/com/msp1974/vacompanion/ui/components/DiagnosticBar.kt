@@ -51,7 +51,8 @@ fun DiagnosticBar(
             InfoGauge(
                 indicatorValue = (diagnosticInfo.audioLevel).toInt(),
                 maxIndicatorValue = 100,
-                smallText = "Mic Level"
+                smallText = "Mic Level",
+                foregroundIndicatorColor = if (diagnosticInfo.audioLevel >= 99) CustomColours.RED else CustomColours.GREEN
             )
             if (diagnosticInfo.wakeWord != "none") {
                 InfoGauge(
