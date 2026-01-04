@@ -4,12 +4,22 @@ import android.content.Context
 import com.msp1974.vacompanion.utils.DeviceCapabilitiesData
 import com.msp1974.vacompanion.utils.DeviceCapabilitiesManager
 import com.msp1974.vacompanion.utils.Logger
-import kotlinx.serialization.json.JsonObject
 import java.net.ServerSocket
 import kotlin.concurrent.thread
+import kotlinx.serialization.json.JsonObject
 
-enum class SatelliteState { STOPPED, RUNNING, STARTING, STOPPING}
-enum class PipelineStatus { INACTIVE, LISTENING, STREAMING }
+enum class SatelliteState {
+    STOPPED,
+    RUNNING,
+    STARTING,
+    STOPPING
+}
+
+enum class PipelineStatus {
+    INACTIVE,
+    LISTENING,
+    STREAMING
+}
 
 interface WyomingCallback {
     fun onSatelliteStarted()
@@ -18,7 +28,7 @@ interface WyomingCallback {
     fun onReleaseInputAudioStream()
 }
 
-class WyomingTCPServer (val context: Context, val port: Int, val cbCallback: WyomingCallback){
+class WyomingTCPServer(val context: Context, val port: Int, val cbCallback: WyomingCallback) {
     var log = Logger()
     var runServer: Boolean = true
     var pipelineClient: ClientHandler? = null
@@ -36,11 +46,7 @@ class WyomingTCPServer (val context: Context, val port: Int, val cbCallback: Wyo
                 // Run client in it's own thread.
                 if (runServer) {
                     thread(name = "ClientHandler-${client.port}") {
-                        ClientHandler(
-                            context,
-                            this,
-                            client
-                        ).run()
+                        ClientHandler(context, this, client).run()
                     }
                 } else {
                     client.close()
@@ -52,7 +58,6 @@ class WyomingTCPServer (val context: Context, val port: Int, val cbCallback: Wyo
         } catch (e: Exception) {
             log.e("Server exception: $e")
         }
-
     }
 
     fun stop() {
@@ -78,12 +83,17 @@ class WyomingTCPServer (val context: Context, val port: Int, val cbCallback: Wyo
         }
     }
 
+    fun sendMediaPlayerState(state: String) {
+        if (pipelineClient != null) {
+            pipelineClient?.sendMediaPlayerState(state)
+        }
+    }
+
     fun sendSetting(name: String, value: Any) {
         if (pipelineClient != null) {
             if (value is Boolean) {
                 pipelineClient?.sendSettingChange(name, value)
-            } else if (value is Int)
-                pipelineClient?.sendSettingChange(name, value)
+            } else if (value is Int) pipelineClient?.sendSettingChange(name, value)
             else if (value is String) {
                 pipelineClient?.sendSettingChange(name, value)
             }
@@ -105,9 +115,4 @@ class WyomingTCPServer (val context: Context, val port: Int, val cbCallback: Wyo
     fun satelliteStopped() {
         cbCallback.onSatelliteStopped()
     }
-
 }
-
-
-
-

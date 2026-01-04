@@ -47,6 +47,25 @@ class CustomWebView @JvmOverloads constructor(
         this.customWebviewClient = customWebViewClient
 
         webViewClient = customWebViewClient
+        
+        // Add WebChromeClient to capture console messages for debugging HA connection issues
+        webChromeClient = object : android.webkit.WebChromeClient() {
+            override fun onConsoleMessage(consoleMessage: android.webkit.ConsoleMessage?): Boolean {
+                consoleMessage?.let {
+                    val level = when (it.messageLevel()) {
+                        android.webkit.ConsoleMessage.MessageLevel.ERROR -> "ERROR"
+                        android.webkit.ConsoleMessage.MessageLevel.WARNING -> "WARNING"
+                        android.webkit.ConsoleMessage.MessageLevel.LOG -> "LOG"
+                        android.webkit.ConsoleMessage.MessageLevel.DEBUG -> "DEBUG"
+                        android.webkit.ConsoleMessage.MessageLevel.TIP -> "TIP"
+                        else -> "UNKNOWN"
+                    }
+                    log.d("WebView Console [$level]: ${it.message()} (${it.sourceId()}:${it.lineNumber()})")
+                }
+                return true
+            }
+        }
+        
         setFocusable(true)
         setFocusableInTouchMode(true)
 
@@ -67,6 +86,12 @@ class CustomWebView @JvmOverloads constructor(
             useWideViewPort = false
             loadWithOverviewMode = true
             cacheMode = WebSettings.LOAD_DEFAULT
+            // Enhanced settings for Home Assistant WebView integration
+            allowFileAccessFromFileURLs = true
+            allowUniversalAccessFromFileURLs = true
+            databaseEnabled = true
+            // Set user agent to mimic a real browser for HA compatibility
+            userAgentString = "Mozilla/5.0 (Linux; Android 11; ViewAssist) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
         }
 
         // Add JS interfaces
@@ -81,11 +106,11 @@ class CustomWebView @JvmOverloads constructor(
 
     val ViewAssistEventHandler = object : ViewAssistCallback {
         override fun onEvent(event: String, data: String) {
-            //if (event == "location-changed") {
-            //    Handler(Looper.getMainLooper()).post({
-            //        setPageLoadingState(PageLoadingStage.LOADED)
-            //    })
-            //}
+            if (event == "location-changed") {
+                Handler(Looper.getMainLooper()).post {
+                    setPageLoadingState(PageLoadingStage.LOADED)
+                }
+            }
             Timber.d("Event received: $event, $data")
         }
     }

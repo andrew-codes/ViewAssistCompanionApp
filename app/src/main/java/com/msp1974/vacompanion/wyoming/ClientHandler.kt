@@ -18,16 +18,6 @@ import com.msp1974.vacompanion.utils.Logger
 import com.msp1974.vacompanion.utils.ScreenUtils
 import com.msp1974.vacompanion.utils.WakeWords
 import io.github.z4kn4fein.semver.toVersion
-import kotlinx.serialization.ExperimentalSerializationApi
-import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.addAll
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.put
-import kotlinx.serialization.json.putJsonArray
-import kotlinx.serialization.json.putJsonObject
-import org.json.JSONException
-import org.json.JSONObject
 import java.io.DataInputStream
 import java.io.DataOutputStream
 import java.net.Socket
@@ -38,13 +28,25 @@ import java.time.format.DateTimeFormatter
 import java.util.Timer
 import java.util.TimerTask
 import kotlin.concurrent.atomics.ExperimentalAtomicApi
-import kotlin.concurrent.atomics.decrementAndFetch
-import kotlin.concurrent.atomics.incrementAndFetch
 import kotlin.concurrent.atomics.minusAssign
 import kotlin.concurrent.atomics.plusAssign
 import kotlin.concurrent.thread
+import kotlinx.serialization.ExperimentalSerializationApi
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.addAll
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
+import kotlinx.serialization.json.putJsonArray
+import kotlinx.serialization.json.putJsonObject
+import org.json.JSONException
+import org.json.JSONObject
 
-class ClientHandler(private val context: Context, private val server: WyomingTCPServer, private val client: Socket) {
+class ClientHandler(
+        private val context: Context,
+        private val server: WyomingTCPServer,
+        private val client: Socket
+) {
     private val log = Logger()
     private val config: APPConfig = APPConfig.getInstance(context)
     private val client_id = client.port
@@ -68,36 +70,42 @@ class ClientHandler(private val context: Context, private val server: WyomingTCP
     private var lastResponseIsQuestion: Boolean = false
 
     // Initiate wake word broadcast receiver
-    var wakeWordBroadcastReceiver: BroadcastReceiver = object : BroadcastReceiver() {
-        override fun onReceive(context: Context, intent: Intent) {
-            if (satelliteStatus == SatelliteState.RUNNING) {
-                Thread(object : Runnable {
-                    override fun run() {
-                        when {
-                            pcmMediaPlayer.isPlaying -> {
-                                sendAudioStop()
-                                pcmMediaPlayer.stop()
-                                volumeDucking("music", false)
-                            }
-                            alarmPlayer.isSounding -> {
-                                actionAlarm(false)
-                            }
-                            else -> {
-                                volumeDucking("all", true)
-                                sendWakeWordDetection()
-                                sendStartPipeline()
-                            }
-                        }
+    var wakeWordBroadcastReceiver: BroadcastReceiver =
+            object : BroadcastReceiver() {
+                override fun onReceive(context: Context, intent: Intent) {
+                    if (satelliteStatus == SatelliteState.RUNNING) {
+                        Thread(
+                                        object : Runnable {
+                                            override fun run() {
+                                                when {
+                                                    pcmMediaPlayer.isPlaying -> {
+                                                        sendAudioStop()
+                                                        pcmMediaPlayer.stop()
+                                                        volumeDucking("music", false)
+                                                    }
+                                                    alarmPlayer.isSounding -> {
+                                                        actionAlarm(false)
+                                                    }
+                                                    else -> {
+                                                        volumeDucking("all", true)
+                                                        sendWakeWordDetection()
+                                                        sendStartPipeline()
+                                                    }
+                                                }
+                                            }
+                                        }
+                                )
+                                .start()
                     }
-                }).start()
+                }
             }
-        }
-    }
     val filter = IntentFilter().apply { addAction(BroadcastSender.WAKE_WORD_DETECTED) }
 
     fun run() {
         val connections = config.atomicConnectionCount.incrementAndGet()
-        log.d("Client $client_id connected from ${client.inetAddress.hostAddress}. Connections: $connections")
+        log.d(
+                "Client $client_id connected from ${client.inetAddress.hostAddress}. Connections: $connections"
+        )
         startIntervalPing()
         while (runClient) {
             try {
@@ -133,13 +141,17 @@ class ClientHandler(private val context: Context, private val server: WyomingTCP
         if (config.atomicConnectionCount.get() > 0) {
             config.atomicConnectionCount.andDecrement
         }
-        log.w("${client.inetAddress.hostAddress}:$client_id closed the connection.  Connections remaining: ${config.atomicConnectionCount.get()}")
+        log.w(
+                "${client.inetAddress.hostAddress}:$client_id closed the connection.  Connections remaining: ${config.atomicConnectionCount.get()}"
+        )
     }
 
     private fun startSatellite() {
 
         if (config.version.toVersion() < config.minRequiredApkVersion.toVersion()) {
-            log.d("App update needed. App is ${config.version}, Min required is ${config.minRequiredApkVersion}")
+            log.d(
+                    "App update needed. App is ${config.version}, Min required is ${config.minRequiredApkVersion}"
+            )
             BroadcastSender.sendBroadcast(context, BroadcastSender.VERSION_MISMATCH)
             return
         }
@@ -151,9 +163,10 @@ class ClientHandler(private val context: Context, private val server: WyomingTCP
         if (config.pairedDeviceID == connectionID) {
             log.d("Starting satellite for ${client.port}")
             LocalBroadcastManager.getInstance(context)
-                .registerReceiver(wakeWordBroadcastReceiver, filter)
+                    .registerReceiver(wakeWordBroadcastReceiver, filter)
 
-            // If HA url was blank in config sent from server set it here based on connected IP and port provided
+            // If HA url was blank in config sent from server set it here based on connected IP and
+            // port provided
             // in config
             config.homeAssistantConnectedIP = "${client.inetAddress.hostAddress}"
 
@@ -176,7 +189,9 @@ class ClientHandler(private val context: Context, private val server: WyomingTCP
                 log.d("Satellite started for $client_id")
             }
         } else {
-            log.i("Invalid connection (${client.inetAddress.hostAddress}:$client_id) attempting to start satellite!")
+            log.i(
+                    "Invalid connection (${client.inetAddress.hostAddress}:$client_id) attempting to start satellite!"
+            )
             log.i("Aborting connection")
             stop()
         }
@@ -259,24 +274,38 @@ class ClientHandler(private val context: Context, private val server: WyomingTCP
                     "pause-satellite" -> {
                         stopSatellite()
                     }
-
                     "transcribe" -> {
                         // Sent when requesting voice command
+                        // Stop music if playing to return to normal mode
+                        if (config.musicPlaying) {
+                            log.d("Stopping music for voice command")
+                            musicPlayer.stop()
+                            sendMediaPlayerState("idle")
+                            config.eventBroadcaster.notifyEvent(Event("music-stopped", "", ""))
+                        }
                         volumeDucking("all", true)
                         requestInputAudioStream()
                         setPipelineNextStageTimeout(10)
+                        // Switch to HA dashboard when voice intent starts
+                        //
+                        // config.eventBroadcaster.notifyEvent(Event("navigate-to-ha", "", ""))
                     }
-
                     "voice-started" -> {
                         // Sent when detected voice command started
+                        // Stop music if playing to return to normal mode
+                        if (config.musicPlaying) {
+                            log.d("Stopping music for voice command (voice-started)")
+                            musicPlayer.stop()
+                            sendMediaPlayerState("idle")
+                            config.eventBroadcaster.notifyEvent(Event("music-stopped", "", ""))
+                        }
                         setPipelineNextStageTimeout(30)
+                        config.eventBroadcaster.notifyEvent(Event("navigate-to-ha", "", ""))
                     }
-
                     "voice-stopped" -> {
                         // Sent when detected voice command stopped
                         setPipelineNextStageTimeout(15)
                     }
-
                     "transcript" -> {
                         // Sent when STT converted voice command to text
                         releaseInputAudioStream()
@@ -287,42 +316,52 @@ class ClientHandler(private val context: Context, private val server: WyomingTCP
                             setPipelineNextStageTimeout(10)
                         }
                     }
-
                     "synthesize" -> {
                         // Sent when conversation engine sent response to command
                         lastResponseIsQuestion =
-                            (event.getProp("text").replace("\n", "").endsWith("?"))
+                                (event.getProp("text").replace("\n", "").endsWith("?"))
                         expectingTTSResponse = true
                         setPipelineNextStageTimeout(10)
                     }
-
                     "pipeline-ended" -> {
                         // Sent when pipeline has finished
                         if (!expectingTTSResponse) {
                             cancelPipelineNextStageTimeout()
                             volumeDucking("all", false)
+                            // No audio response, interaction complete - return to external view
+                            // after configured timeout
+                            val delayMs = config.screenTimeout.toLong()
+                            log.d(
+                                    "Pipeline ended with no TTS response - scheduling navigate-home in ${delayMs}ms (${delayMs/1000}s)"
+                            )
+                            handler.postDelayed(
+                                    {
+                                        log.d("Navigate-home timer expired - sending event")
+                                        config.eventBroadcaster.notifyEvent(
+                                                Event("navigate-home", "", "")
+                                        )
+                                    },
+                                    delayMs
+                            )
                         }
                         if (pipelineStatus != PipelineStatus.STREAMING) {
                             releaseInputAudioStream()
                         }
                     }
-
                     "audio-start" -> {
                         // Sent when audio stream about to start
-                        expectingTTSResponse = false  // This is it so reset expecting
+                        expectingTTSResponse = false // This is it so reset expecting
                         cancelPipelineNextStageTimeout() // Playing audio, cancel any timeout
                         pipelineStatus = PipelineStatus.STREAMING
-                        volumeDucking("all", true)  // Duck here if announcement
+                        volumeDucking("all", true) // Duck here if announcement
                         pcmMediaPlayer.play()
                     }
-
                     "audio-chunk" -> {
                         // Audio chunk
                         if (pcmMediaPlayer.isPlaying) {
                             pcmMediaPlayer.writeAudio(event.payload)
                         }
                     }
-
                     "audio-stop" -> {
                         // Sent when all audio chunks sent
                         if (pcmMediaPlayer.isPlaying) {
@@ -330,25 +369,38 @@ class ClientHandler(private val context: Context, private val server: WyomingTCP
                         }
                         pipelineStatus = PipelineStatus.INACTIVE
                         sendEvent(
-                            "played",
+                                "played",
                         )
 
                         if (config.continueConversation && lastResponseIsQuestion) {
                             sendStartPipeline()
                         } else {
-                            setPipelineNextStageTimeout(2)
+                            // Voice interaction complete, switch back to external view after
+                            // configured timeout
+                            val delayMs = config.screenTimeout.toLong()
+                            log.d(
+                                    "Audio stopped - scheduling navigate-home in ${delayMs}ms (${delayMs/1000}s)"
+                            )
+                            handler.postDelayed(
+                                    {
+                                        log.d("Navigate-home timer expired - sending event")
+                                        config.eventBroadcaster.notifyEvent(
+                                                Event("navigate-home", "", "")
+                                        )
+                                    },
+                                    delayMs
+                            )
                         }
-
                     }
-
                     "error" -> {
                         resetPipeline()
+                        // Error occurred, return to external view
+                        log.d("Error event - sending immediate navigate-home")
+                        config.eventBroadcaster.notifyEvent(Event("navigate-home", "", ""))
                     }
-
                     "custom-action" -> {
                         handleCustomAction(event)
                     }
-
                     "timer-finished" -> {
                         actionAlarm(true)
                     }
@@ -362,9 +414,7 @@ class ClientHandler(private val context: Context, private val server: WyomingTCP
 
     private fun setPipelineNextStageTimeout(duration: Int) {
         cancelPipelineNextStageTimeout()
-        handler.postDelayed({
-            handlePipelineTimeout()
-        }, duration * 1000L)
+        handler.postDelayed({ handlePipelineTimeout() }, duration * 1000L)
     }
 
     private fun cancelPipelineNextStageTimeout() {
@@ -383,7 +433,7 @@ class ClientHandler(private val context: Context, private val server: WyomingTCP
 
         volumeDucking("all", false)
 
-        if (pipelineStatus != PipelineStatus.STREAMING) {
+        if (pipelineStatus != PipelineStatus.INACTIVE) {
             releaseInputAudioStream()
         }
         sendAudioStop()
@@ -404,63 +454,102 @@ class ClientHandler(private val context: Context, private val server: WyomingTCP
     }
 
     private fun handleCustomAction(event: WyomingPacket) {
+        // Check if this action requires HA dashboard - if so, navigate there first
+        val actionRequiresHA =
+                when (event.getProp("action")) {
+                    "play-media", "play", "pause", "stop", "set-volume" -> true
+                    "navigate" -> true
+                    else -> false
+                }
+
+        if (actionRequiresHA) {
+            // Trigger navigation to HA dashboard first
+            config.eventBroadcaster.notifyEvent(Event("navigate-to-ha", "", ""))
+
+            // Add a small delay to ensure navigation completes before processing the action
+            Handler(Looper.getMainLooper()).postDelayed({ processCustomAction(event) }, 1000)
+        } else {
+            processCustomAction(event)
+        }
+    }
+
+    private fun processCustomAction(event: WyomingPacket) {
         when (event.getProp("action")) {
             "play-media" -> {
+                log.d("=== PLAY-MEDIA ACTION RECEIVED ===")
                 if (event.getProp("payload") != "") {
                     val values = JSONObject(event.getProp("payload"))
-                    musicPlayer.play(values.getString("url"))
-                    musicPlayer.setVolume(values.getInt("volume").toFloat() / 100)
+                    val url = values.getString("url")
+                    val volume = values.getInt("volume").toFloat() / 100
+                    log.d("Playing media: URL=$url, Volume=$volume")
+                    musicPlayer.play(url)
+                    musicPlayer.setVolume(volume)
+                    // Send media player state
+                    sendMediaPlayerState("playing")
+                    // Trigger music-started event
+                    log.d("Sending music-started event")
+                    config.eventBroadcaster.notifyEvent(Event("music-started", "", ""))
+                    log.d("music-started event sent")
+                } else {
+                    log.w("play-media received but payload was empty")
                 }
             }
-
             "play" -> {
                 musicPlayer.resume()
+                sendMediaPlayerState("playing")
             }
-
             "pause" -> {
                 musicPlayer.pause()
+                sendMediaPlayerState("paused")
             }
-
             "stop" -> {
+                log.d("=== STOP ACTION RECEIVED ===")
                 musicPlayer.stop()
+                // Send media player state
+                sendMediaPlayerState("idle")
+                // Trigger music-stopped event
+                log.d("Sending music-stopped event")
+                config.eventBroadcaster.notifyEvent(Event("music-stopped", "", ""))
+                log.d("music-stopped event sent")
             }
-
             "set-volume" -> {
                 if (event.getProp("payload") != "") {
                     val values = JSONObject(event.getProp("payload"))
                     musicPlayer.setVolume(values.getInt("volume").toFloat() / 100)
                 }
             }
-
             "toast-message" -> {
                 if (event.getProp("payload") != "") {
                     try {
                         val values = JSONObject(event.getProp("payload"))
                         BroadcastSender.sendBroadcast(
-                            context,
-                            BroadcastSender.TOAST_MESSAGE,
-                            values.getString("message")
+                                context,
+                                BroadcastSender.TOAST_MESSAGE,
+                                values.getString("message")
                         )
                     } catch (ex: Exception) {
                         log.e("Error sending toast message: $ex")
                     }
                 }
             }
-
             "refresh" -> {
                 config.eventBroadcaster.notifyEvent(Event("refresh", "", ""))
             }
-
+            "navigate" -> {
+                if (event.getProp("payload") != "") {
+                    val values = JSONObject(event.getProp("payload"))
+                    val path = values.getString("path")
+                    config.eventBroadcaster.notifyEvent(Event("navigate", path, ""))
+                }
+            }
             "screen-wake" -> {
                 config.eventBroadcaster.notifyEvent(Event("screenWake", "", ""))
             }
-
             "screen-sleep" -> {
                 config.eventBroadcaster.notifyEvent(Event("screenSleep", "", ""))
             }
-
             "wake" -> {
-                thread{
+                thread {
                     volumeDucking("all", true)
                     sendWakeWordDetection()
                     sendStartPipeline()
@@ -476,16 +565,18 @@ class ClientHandler(private val context: Context, private val server: WyomingTCP
             "alarm" -> {
                 if (event.getProp("payload") != "") {
                     val values = JSONObject(event.getProp("payload"))
-                    val active = try {
-                        values.getBoolean("activate")
-                    } catch (ex: JSONException) {
-                        false
-                    }
-                    val url = try {
-                        values.getString("url")
-                    } catch (ex: JSONException) {
-                        ""
-                    }
+                    val active =
+                            try {
+                                values.getBoolean("activate")
+                            } catch (ex: JSONException) {
+                                false
+                            }
+                    val url =
+                            try {
+                                values.getString("url")
+                            } catch (ex: JSONException) {
+                                ""
+                            }
                     if (active) {
                         actionAlarm(true, url)
                     } else {
@@ -517,7 +608,6 @@ class ClientHandler(private val context: Context, private val server: WyomingTCP
                     musicPlayer.unDuckVolume()
                 }
             }
-
         }
     }
 
@@ -534,16 +624,15 @@ class ClientHandler(private val context: Context, private val server: WyomingTCP
     }
 
     private fun startIntervalPing() {
-        pingTimer.schedule(object: TimerTask() {
-            override fun run() {
-                sendEvent(
-                    "ping",
-                    buildJsonObject {
-                        put("text", "")
+        pingTimer.schedule(
+                object : TimerTask() {
+                    override fun run() {
+                        sendEvent("ping", buildJsonObject { put("text", "") })
                     }
-                )
-            }
-        },0,2000)
+                },
+                0,
+                2000
+        )
     }
 
     private fun stopIntervalPing() {
@@ -551,116 +640,111 @@ class ClientHandler(private val context: Context, private val server: WyomingTCP
     }
 
     fun sendPong() {
-        sendEvent(
-            "pong",
-            buildJsonObject {
-                put("text", "")
-            }
-        )
+        sendEvent("pong", buildJsonObject { put("text", "") })
     }
 
     @OptIn(ExperimentalSerializationApi::class)
     fun sendInfo() {
         val wakeWords = WakeWords(context).getWakeWords()
         sendEvent(
-            "info",
-            buildJsonObject {
-                put("version", config.version)
-                putJsonArray("asr") {}
-                putJsonArray("tts") {}
-                putJsonArray("handle") {}
-                putJsonArray("intent") {}
-                putJsonArray("wake") {
-                    add(
-                        buildJsonObject {
-                            put("name", "available_wake_words")
-                            putJsonObject("attribution") {
-                                put("name", "")
-                                put("url", "")
-                            }
-                            put("installed", true)
-                            putJsonArray("models") {
-                                addAll(wakeWords.map {
-                                    buildJsonObject {
-                                        put("name", it.key)
-                                        putJsonObject("attribution") {
-                                            put("name", "")
-                                            put("url", "")
-                                        }
-                                        put("installed", true)
-                                        putJsonArray("languages") {
-                                            addAll(listOf("en"))
-                                        }
-                                        put("phrase", it.value.name)
-                                    }
-                                })
-                            }
-                        }
-                    )
-                }
-                putJsonArray("stt") {}
-
-                putJsonObject("satellite") {
-                    put("name", "VACA ${config.uuid}")
-                    putJsonObject("attribution") {
-                        put("name", "")
-                        put("url", "")
-                    }
-                    put("installed", true)
-                    put("description", "View Assist Companion App")
+                "info",
+                buildJsonObject {
                     put("version", config.version)
-                    put("area", "")
-                    put("has_vad", false)
-                    putJsonObject("snd_format") {
-                        put("channels", 1)
-                        put("rate", 16000)
-                        put("width", 2)
+                    putJsonArray("asr") {}
+                    putJsonArray("tts") {}
+                    putJsonArray("handle") {}
+                    putJsonArray("intent") {}
+                    putJsonArray("wake") {
+                        add(
+                                buildJsonObject {
+                                    put("name", "available_wake_words")
+                                    putJsonObject("attribution") {
+                                        put("name", "")
+                                        put("url", "")
+                                    }
+                                    put("installed", true)
+                                    putJsonArray("models") {
+                                        addAll(
+                                                wakeWords.map {
+                                                    buildJsonObject {
+                                                        put("name", it.key)
+                                                        putJsonObject("attribution") {
+                                                            put("name", "")
+                                                            put("url", "")
+                                                        }
+                                                        put("installed", true)
+                                                        putJsonArray("languages") {
+                                                            addAll(listOf("en"))
+                                                        }
+                                                        put("phrase", it.value.name)
+                                                    }
+                                                }
+                                        )
+                                    }
+                                }
+                        )
                     }
-                    putJsonArray("active_wake_words") {
-                        addAll(listOf(config.wakeWord))
+                    putJsonArray("stt") {}
+
+                    putJsonObject("satellite") {
+                        put("name", "VACA ${config.uuid}")
+                        putJsonObject("attribution") {
+                            put("name", "")
+                            put("url", "")
+                        }
+                        put("installed", true)
+                        put("description", "View Assist Companion App")
+                        put("version", config.version)
+                        put("area", "")
+                        put("has_vad", false)
+                        putJsonObject("snd_format") {
+                            put("channels", 1)
+                            put("rate", 16000)
+                            put("width", 2)
+                        }
+                        putJsonArray("active_wake_words") { addAll(listOf(config.wakeWord)) }
+                        put("max_active_wake_words", 1)
                     }
-                    put("max_active_wake_words", 1)
                 }
-            }
         )
     }
 
     fun sendWakeWordDetection() {
-        //status.pipelineStatus = PipelineStatus.LISTENING
+        // status.pipelineStatus = PipelineStatus.LISTENING
         sendEvent(
-            "detection",
-            buildJsonObject {
-                put("name", config.wakeWord)
-                put("timestamp", DateTimeFormatter.ISO_INSTANT.format(Instant.now()))
-                put("speaker", "")
-            }
+                "detection",
+                buildJsonObject {
+                    put("name", config.wakeWord)
+                    put("timestamp", DateTimeFormatter.ISO_INSTANT.format(Instant.now()))
+                    put("speaker", "")
+                }
         )
     }
 
     fun sendStartPipeline() {
         sendEvent(
-            "run-pipeline",
-            buildJsonObject {
-                put("name", "VACA ${config.uuid}")
-                put("start_stage", "asr")
-                put("end_stage", "tts")
-                put("restart_on_end", false)
-                putJsonObject("snd_format") {
-                    put("rate", config.sampleRate)
-                    put("width", config.audioWidth)
-                    put("channels", config.audioChannels)
+                "run-pipeline",
+                buildJsonObject {
+                    put("name", "VACA ${config.uuid}")
+                    put("start_stage", "asr")
+                    put("end_stage", "tts")
+                    put("restart_on_end", false)
+                    putJsonObject("snd_format") {
+                        put("rate", config.sampleRate)
+                        put("width", config.audioWidth)
+                        put("channels", config.audioChannels)
+                    }
                 }
-            }
         )
         lastResponseIsQuestion = false
     }
 
     fun sendAudioStop() {
         sendEvent(
-            "audio-stop",
-            buildJsonObject {
-                put("timestamp", DateTimeFormatter.ISO_INSTANT.format(Instant.now()))
-            }
+                "audio-stop",
+                buildJsonObject {
+                    put("timestamp", DateTimeFormatter.ISO_INSTANT.format(Instant.now()))
+                }
         )
     }
 
@@ -670,7 +754,15 @@ class ClientHandler(private val context: Context, private val server: WyomingTCP
             put("width", config.audioWidth)
             put("channels", config.audioChannels)
         }
-        val event = WyomingPacket(JSONObject(mapOf("type" to "audio-chunk", "data" to JSONObject(data.toString()))))
+        val event =
+                WyomingPacket(
+                        JSONObject(
+                                mapOf(
+                                        "type" to "audio-chunk",
+                                        "data" to JSONObject(data.toString())
+                                )
+                        )
+                )
         event.payload = audio
 
         try {
@@ -682,52 +774,48 @@ class ClientHandler(private val context: Context, private val server: WyomingTCP
 
     fun sendSettingChange(name: String, value: String) {
         sendCustomEvent(
-            "settings",
-            buildJsonObject {
-            put("timestamp", DateTimeFormatter.ISO_INSTANT.format(Instant.now()))
-            putJsonObject("settings") {
-                put(name, value)
-            }
-        })
+                "settings",
+                buildJsonObject {
+                    put("timestamp", DateTimeFormatter.ISO_INSTANT.format(Instant.now()))
+                    putJsonObject("settings") { put(name, value) }
+                }
+        )
     }
 
     fun sendSettingChange(name: String, value: Boolean) {
         sendCustomEvent(
-            "settings",
-            buildJsonObject {
-                put("timestamp", DateTimeFormatter.ISO_INSTANT.format(Instant.now()))
-                putJsonObject("settings") {
-                    put(name, value)
+                "settings",
+                buildJsonObject {
+                    put("timestamp", DateTimeFormatter.ISO_INSTANT.format(Instant.now()))
+                    putJsonObject("settings") { put(name, value) }
                 }
-            })
+        )
     }
 
     fun sendSettingChange(name: String, value: Int) {
         sendCustomEvent(
-            "settings",
-            buildJsonObject {
-                put("timestamp", DateTimeFormatter.ISO_INSTANT.format(Instant.now()))
-                putJsonObject("settings") {
-                    put(name, value)
+                "settings",
+                buildJsonObject {
+                    put("timestamp", DateTimeFormatter.ISO_INSTANT.format(Instant.now()))
+                    putJsonObject("settings") { put(name, value) }
                 }
-            })
+        )
     }
 
-
     fun sendStatus(data: JsonObject) {
-        sendCustomEvent(
-            "status",
-            data
-        )
+        sendCustomEvent("status", data)
     }
 
     fun sendCapabilities() {
         val data = DeviceCapabilitiesManager.toJson(server.deviceInfo).toMap()
-        sendCustomEvent("capabilities", buildJsonObject {
-            for (key in data.keys) {
-                put(key, data[key] as JsonElement)
-            }
-        })
+        sendCustomEvent(
+                "capabilities",
+                buildJsonObject {
+                    for (key in data.keys) {
+                        put(key, data[key] as JsonElement)
+                    }
+                }
+        )
     }
 
     fun sendCustomEvent(type: String, data: JsonObject) {
@@ -738,13 +826,21 @@ class ClientHandler(private val context: Context, private val server: WyomingTCP
         sendEvent("custom-event", customEventData)
     }
 
-    fun sendEvent(type: String, data: JsonObject = buildJsonObject {  }) {
+    fun sendEvent(type: String, data: JsonObject = buildJsonObject {}) {
         try {
-            val event = WyomingPacket(JSONObject(mapOf("type" to type, "data" to JSONObject(data.toString()))))
+            val event =
+                    WyomingPacket(
+                            JSONObject(mapOf("type" to type, "data" to JSONObject(data.toString())))
+                    )
             writeEvent(event)
         } catch (ex: Exception) {
             log.e("Error sending event: $type - $ex")
         }
+    }
+
+    fun sendMediaPlayerState(state: String) {
+        log.d("Sending media player state: $state")
+        sendStatus(buildJsonObject { putJsonObject("media_player") { put("state", state) } })
     }
 
     private fun readEvent(): WyomingPacket? {
@@ -805,9 +901,10 @@ class ClientHandler(private val context: Context, private val server: WyomingTCP
                 wyomingPacket.payload = payloadBytes
             }
             return wyomingPacket
-
         } catch (ex: Exception) {
-            log.e("Event read exception ${ex.toString().substring(0, ex.toString().length.coerceAtMost(50))}")
+            log.e(
+                    "Event read exception ${ex.toString().substring(0, ex.toString().length.coerceAtMost(50))}"
+            )
         }
         return null
     }
@@ -852,9 +949,5 @@ class ClientHandler(private val context: Context, private val server: WyomingTCP
         } catch (ex: Exception) {
             log.e("Unknown error sending event: $ex")
         }
-
     }
-
-
-
 }

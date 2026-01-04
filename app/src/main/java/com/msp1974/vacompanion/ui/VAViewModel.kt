@@ -17,28 +17,27 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import timber.log.Timber
 
-
 data class State(
-    val statusMessage: String = "",
-    var orientation: Int = Configuration.ORIENTATION_LANDSCAPE,
+        val statusMessage: String = "",
+        var orientation: Int = Configuration.ORIENTATION_LANDSCAPE,
+        var launchOnBoot: Boolean = true,
+        var satelliteRunning: Boolean = false,
+        var swipeRefreshEnabled: Boolean = false,
+        var darkMode: Boolean = false,
+        var isDND: Boolean = false,
+        var screenBlank: Boolean = true,
+        var showingHAView: Boolean =
+                false, // Track which WebView is active (false = external URL, true = HA)
+        var musicPlaying: Boolean = false, // Track if music is currently playing
+        var appInfo: Map<String, String> = mapOf(),
+        var diagnosticInfo: DiagnosticInfo = DiagnosticInfo(),
+        var showAlertDialog: Boolean = false,
+        var alertDialog: VADialog? = null,
+        var updates: UpdateStatus = UpdateStatus(),
+        var webViewPageLoadingStage: PageLoadingStage = PageLoadingStage.NOT_STARTED,
+)
 
-    var launchOnBoot: Boolean = true,
-    var satelliteRunning: Boolean = false,
-    var swipeRefreshEnabled: Boolean = false,
-    var darkMode: Boolean = false,
-    var isDND: Boolean = false,
-    var screenBlank: Boolean = true,
-
-    var appInfo: Map<String, String> = mapOf(),
-    var diagnosticInfo: DiagnosticInfo = DiagnosticInfo(),
-
-    var showAlertDialog: Boolean = false,
-    var alertDialog: VADialog? = null,
-    var updates: UpdateStatus = UpdateStatus(),
-    var webViewPageLoadingStage: PageLoadingStage = PageLoadingStage.NOT_STARTED,
-    )
-
-class VAViewModel: ViewModel(), EventListener {
+class VAViewModel : ViewModel(), EventListener {
     private val log = Logger()
 
     private val _vacaState = MutableStateFlow(State())
@@ -63,8 +62,8 @@ class VAViewModel: ViewModel(), EventListener {
     fun initValues() {
         _vacaState.update { currentState ->
             currentState.copy(
-                launchOnBoot = config!!.startOnBoot,
-                swipeRefreshEnabled = config!!.swipeRefresh
+                    launchOnBoot = config!!.startOnBoot,
+                    swipeRefreshEnabled = config!!.swipeRefresh
             )
         }
     }
@@ -72,11 +71,7 @@ class VAViewModel: ViewModel(), EventListener {
     var launchOnBoot: Boolean
         get() = config!!.startOnBoot
         set(value) {
-            _vacaState.update { currentState ->
-                currentState.copy(
-                    launchOnBoot = value
-                )
-            }
+            _vacaState.update { currentState -> currentState.copy(launchOnBoot = value) }
             config!!.startOnBoot = value
         }
 
@@ -86,43 +81,34 @@ class VAViewModel: ViewModel(), EventListener {
             "pairedDeviceID" -> buildAppInfo()
             "darkMode" -> {
                 _vacaState.update { currentState ->
-                    currentState.copy(
-                        darkMode = event.newValue as Boolean
-                    )
+                    currentState.copy(darkMode = event.newValue as Boolean)
                 }
             }
             "swipeRefresh" -> {
                 _vacaState.update { currentState ->
-                    currentState.copy(
-                        swipeRefreshEnabled = event.newValue as Boolean
-                    )
+                    currentState.copy(swipeRefreshEnabled = event.newValue as Boolean)
                 }
             }
             "doNotDisturb" -> {
                 _vacaState.update { currentState ->
-                    currentState.copy(
-                        isDND = event.newValue as Boolean
-                    )
+                    currentState.copy(isDND = event.newValue as Boolean)
                 }
             }
             "diagnosticsEnabled" -> {
                 _vacaState.update { currentState ->
                     currentState.copy(
-                        diagnosticInfo = _vacaState.value.diagnosticInfo.copy(
-                            show = event.newValue as Boolean
-                        )
+                            diagnosticInfo =
+                                    _vacaState.value.diagnosticInfo.copy(
+                                            show = event.newValue as Boolean
+                                    )
                     )
                 }
             }
             "diagnosticStats" -> {
                 val data = event.newValue as DiagnosticInfo
-                consumed = false  //Do not log event as very numerous
+                consumed = false // Do not log event as very numerous
 
-                _vacaState.update { currentState ->
-                    currentState.copy(
-                        diagnosticInfo = data
-                    )
-                }
+                _vacaState.update { currentState -> currentState.copy(diagnosticInfo = data) }
             }
             else -> consumed = false
         }
@@ -132,67 +118,58 @@ class VAViewModel: ViewModel(), EventListener {
     }
 
     fun showUpdateDialog(alertDialog: VADialog) {
-        val alert = VADialog(
-            title = alertDialog.title,
-            message = alertDialog.message,
-            confirmText = alertDialog.confirmText,
-            dismissText = alertDialog.dismissText,
-            confirmCallback = {
-                _vacaState.update { currentState ->
-                    currentState.copy(
-                        alertDialog = null
-                    )
-                }
-                alertDialog.confirmCallback()
-            },
-            dismissCallback = {
-                _vacaState.update { currentState ->
-                    currentState.copy(
-                        alertDialog = null
-                    )
-                }
-                alertDialog.dismissCallback()
-            },
-        )
+        val alert =
+                VADialog(
+                        title = alertDialog.title,
+                        message = alertDialog.message,
+                        confirmText = alertDialog.confirmText,
+                        dismissText = alertDialog.dismissText,
+                        confirmCallback = {
+                            _vacaState.update { currentState ->
+                                currentState.copy(alertDialog = null)
+                            }
+                            alertDialog.confirmCallback()
+                        },
+                        dismissCallback = {
+                            _vacaState.update { currentState ->
+                                currentState.copy(alertDialog = null)
+                            }
+                            alertDialog.dismissCallback()
+                        },
+                )
 
         _vacaState.update { currentState ->
             currentState.copy(
-                alertDialog = alert,
+                    alertDialog = alert,
             )
         }
     }
 
     fun setSatelliteRunning(isRunning: Boolean) {
-        _vacaState.update { currentState ->
-            currentState.copy(
-                satelliteRunning = isRunning
-            )
-        }
+        _vacaState.update { currentState -> currentState.copy(satelliteRunning = isRunning) }
     }
 
     fun setStatusMessage(statusMessage: String) {
-        _vacaState.update { currentState ->
-            currentState.copy(
-                statusMessage = statusMessage
-            )
-        }
+        _vacaState.update { currentState -> currentState.copy(statusMessage = statusMessage) }
     }
 
     fun setScreenBlank(screenOn: Boolean) {
-        _vacaState.update { currentState ->
-            currentState.copy(
-                screenBlank = screenOn
-            )
-        }
+        _vacaState.update { currentState -> currentState.copy(screenBlank = screenOn) }
     }
 
     fun setWebViewPageLoadingState(stage: PageLoadingStage) {
         Timber.d("WebView page loading state: $stage")
-        _vacaState.update { currentState ->
-            currentState.copy(
-                webViewPageLoadingStage = stage
-            )
-        }
+        _vacaState.update { currentState -> currentState.copy(webViewPageLoadingStage = stage) }
+    }
+
+    fun setShowingHAView(showHA: Boolean) {
+        Timber.d("Switching to ${if (showHA) "HA" else "External"} WebView")
+        _vacaState.update { currentState -> currentState.copy(showingHAView = showHA) }
+    }
+
+    fun setMusicPlaying(playing: Boolean) {
+        Timber.d("Setting musicPlaying to: $playing")
+        _vacaState.update { currentState -> currentState.copy(musicPlaying = playing) }
     }
 
     fun onNetworkStateChange() {
@@ -200,17 +177,21 @@ class VAViewModel: ViewModel(), EventListener {
     }
 
     private fun buildAppInfo() {
-       _vacaState.update { currentState ->
+        _vacaState.update { currentState ->
             currentState.copy(
-                appInfo = mapOf(
-                    "Version" to config!!.version,
-                    "IP Address" to (if (Helpers.isNetworkAvailable(config!!.context)) Helpers.getIpv4HostAddress() else ""),
-                    "Port" to APPConfig.SERVER_PORT.toString(),
-                    "UUID" to config!!.uuid,
-                    "Paired to" to config!!.pairedDeviceID,
-                )
-           )
-       }
+                    appInfo =
+                            mapOf(
+                                    "Version" to config!!.version,
+                                    "IP Address" to
+                                            (if (Helpers.isNetworkAvailable(config!!.context))
+                                                    Helpers.getIpv4HostAddress()
+                                            else ""),
+                                    "Port" to APPConfig.SERVER_PORT.toString(),
+                                    "UUID" to config!!.uuid,
+                                    "Paired to" to config!!.pairedDeviceID,
+                            )
+            )
+        }
     }
 
     fun checkForUpdate() {
@@ -218,32 +199,32 @@ class VAViewModel: ViewModel(), EventListener {
     }
 
     fun clearPairedDevice() {
-        val d = VADialog(
-            title = "Clear Paired Device Entry",
-            message = "This will delete the currently paired Home Assistant server and allow another server to connect and pair to this device.",
-            confirmText = "Confirm",
-            dismissText = "Cancel",
-            confirmCallback = {
-                config!!.pairedDeviceID = ""
-                config!!.accessToken = ""
-                config!!.refreshToken = ""
-                config!!.tokenExpiry = 0
-            },
-            dismissCallback = {}
-        )
+        val d =
+                VADialog(
+                        title = "Clear Paired Device Entry",
+                        message =
+                                "This will delete the currently paired Home Assistant server and allow another server to connect and pair to this device.",
+                        confirmText = "Confirm",
+                        dismissText = "Cancel",
+                        confirmCallback = {
+                            config!!.pairedDeviceID = ""
+                            config!!.accessToken = ""
+                            config!!.refreshToken = ""
+                            config!!.tokenExpiry = 0
+                        },
+                        dismissCallback = {}
+                )
         showUpdateDialog(d)
     }
-
-
 }
 
 class VADialog(
-    val title: String = "AlertDialog",
-    val message: String = "Message",
-    val confirmText: String = "Yes",
-    val dismissText: String = "No",
-    val confirmCallback: () -> Unit,
-    val dismissCallback: () -> Unit
+        val title: String = "AlertDialog",
+        val message: String = "Message",
+        val confirmText: String = "Yes",
+        val dismissText: String = "No",
+        val confirmCallback: () -> Unit,
+        val dismissCallback: () -> Unit
 ) {
     fun onConfirm() {
         confirmCallback()
@@ -255,16 +236,16 @@ class VADialog(
 }
 
 data class UpdateStatus(
-    var updateAvailable: Boolean = false,
-    var availableVersion: String = "0.0.0"
+        var updateAvailable: Boolean = false,
+        var availableVersion: String = "0.0.0"
 )
 
 data class DiagnosticInfo(
-    var show: Boolean = false,
-    var audioLevel: Float = 0f,
-    var detectionThreshold: Float = 0f,
-    var detectionLevel: Float = 0f,
-    var mode: AudioRouteOption = AudioRouteOption.NONE,
-    var wakeWord: String = "",
-    var vadDetection: Boolean = false
+        var show: Boolean = false,
+        var audioLevel: Float = 0f,
+        var detectionThreshold: Float = 0f,
+        var detectionLevel: Float = 0f,
+        var mode: AudioRouteOption = AudioRouteOption.NONE,
+        var wakeWord: String = "",
+        var vadDetection: Boolean = false
 )

@@ -35,7 +35,9 @@ class WebViewJavascriptInterface(val view: WebView, val cbCallback: ExternalAuth
     @JavascriptInterface
     fun getExternalAuth(payload: String) {
         log.d("HA Requested external auth callback - $payload")
+        log.d("About to call onRequestExternalAuth on callback: ${cbCallback::class.simpleName}")
         cbCallback.onRequestExternalAuth(view)
+        log.d("Completed onRequestExternalAuth callback")
     }
     @JavascriptInterface
     fun revokeExternalAuth(payload: String) {

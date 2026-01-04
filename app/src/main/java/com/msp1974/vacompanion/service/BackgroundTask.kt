@@ -5,7 +5,6 @@ import android.content.Context
 import android.content.Context.NOTIFICATION_SERVICE
 import android.content.res.AssetManager
 import android.media.AudioManager
-import com.msp1974.vacompanion.wyoming.Zeroconf
 import com.msp1974.vacompanion.audio.AudioDSP
 import com.msp1974.vacompanion.audio.AudioManager as AudManager
 import com.msp1974.vacompanion.audio.WakeWordSoundPlayer
@@ -22,10 +21,13 @@ import com.msp1974.vacompanion.utils.Helpers
 import com.msp1974.vacompanion.utils.WakeWords
 import com.msp1974.vacompanion.wyoming.WyomingCallback
 import com.msp1974.vacompanion.wyoming.WyomingTCPServer
+import com.msp1974.vacompanion.wyoming.Zeroconf
 import com.msp1974.viewassistcompanionapp.audio.AudioRecorder
 import com.rementia.openwakeword.lib.WakeWordEngine
 import com.rementia.openwakeword.lib.model.DetectionMode
 import com.rementia.openwakeword.lib.model.WakeWordModel
+import java.util.Date
+import kotlin.concurrent.thread
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -36,12 +38,15 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonObject
 import timber.log.Timber
-import java.util.Date
-import kotlin.concurrent.thread
 
-enum class AudioRouteOption { NONE, DETECT, PROCESS_NO_DETECT, STREAM}
+enum class AudioRouteOption {
+    NONE,
+    DETECT,
+    PROCESS_NO_DETECT,
+    STREAM
+}
 
-internal class BackgroundTaskController (private val context: Context): EventListener {
+internal class BackgroundTaskController(private val context: Context) : EventListener {
 
     private val firebase = FirebaseManager.getInstance()
     private var config: APPConfig = APPConfig.getInstance(context)
@@ -53,8 +58,8 @@ internal class BackgroundTaskController (private val context: Context): EventLis
     private var wakeWordEngine: WakeWordEngine? = null
     private var holdDetectionLevelJob: Job? = null
     private var detectionScoreMonitorJob: Job? = null
+    private var audioRouteResetJob: Job? = null
     private var lastWakeWordDetectionScore = 0f
-
 
     val zeroConf: Zeroconf = Zeroconf(context)
 
@@ -70,49 +75,63 @@ internal class BackgroundTaskController (private val context: Context): EventLis
         assetManager = context.assets
 
         // Start wyoming server
-        server = WyomingTCPServer(context, config.serverPort, object : WyomingCallback {
-            override fun onSatelliteStarted() {
-                Timber.i("Background Task - Connection detected")
-                setInitialValues()
-                startSensors(context)
-                startOpenWakeWordDetection()
-                startInputAudio()
-                BroadcastSender.sendBroadcast(context, BroadcastSender.SATELLITE_STARTED)
-                zeroConf.unregisterService()
-            }
+        server =
+                WyomingTCPServer(
+                        context,
+                        config.serverPort,
+                        object : WyomingCallback {
+                            override fun onSatelliteStarted() {
+                                Timber.i("Background Task - Connection detected")
+                                setInitialValues()
+                                startSensors(context)
+                                startOpenWakeWordDetection()
+                                startInputAudio()
+                                BroadcastSender.sendBroadcast(
+                                        context,
+                                        BroadcastSender.SATELLITE_STARTED
+                                )
+                                zeroConf.unregisterService()
+                            }
 
-            override fun onSatelliteStopped() {
-                Timber.i("Background Task - Disconnection detected")
-                BroadcastSender.sendBroadcast(context, BroadcastSender.SATELLITE_STOPPED)
-                if (sensorRunner != null) {
-                    sensorRunner!!.stop()
-                    sensorRunner = null
-                }
-                stopOpenWakeWordDetection()
-                stopInputAudio()
-                stopSensors()
-                zeroConf.registerService(config.serverPort)
-            }
+                            override fun onSatelliteStopped() {
+                                Timber.i("Background Task - Disconnection detected")
+                                BroadcastSender.sendBroadcast(
+                                        context,
+                                        BroadcastSender.SATELLITE_STOPPED
+                                )
+                                if (sensorRunner != null) {
+                                    sensorRunner!!.stop()
+                                    sensorRunner = null
+                                }
+                                stopOpenWakeWordDetection()
+                                stopInputAudio()
+                                stopSensors()
+                                zeroConf.registerService(config.serverPort)
+                            }
 
-            override fun onRequestInputAudioStream() {
-                Timber.i("Streaming audio to server")
-                audioRoute = AudioRouteOption.STREAM
-            }
+                            override fun onRequestInputAudioStream() {
+                                Timber.i("Streaming audio to server")
+                                // Cancel any pending audio route reset
+                                audioRouteResetJob?.cancel()
+                                audioRouteResetJob = null
+                                audioRoute = AudioRouteOption.STREAM
+                            }
 
-            override fun onReleaseInputAudioStream() {
-                Timber.i("Stopped streaming audio to server")
-                if (audioRoute == AudioRouteOption.STREAM) {
-                    audioRoute = AudioRouteOption.PROCESS_NO_DETECT
-                    lastWakeWordDetectionScore = 0f
+                            override fun onReleaseInputAudioStream() {
+                                Timber.i("Stopped streaming audio to server")
+                                if (audioRoute == AudioRouteOption.STREAM) {
+                                    audioRoute = AudioRouteOption.PROCESS_NO_DETECT
+                                    lastWakeWordDetectionScore = 0f
 
-                    scope.launch {
-                        delay(2000)
-                        audioRoute = AudioRouteOption.DETECT
-                    }
-                }
-            }
-        })
-        thread(name="WyomingServer") { server.start() }
+                                    audioRouteResetJob = scope.launch {
+                                        delay(2000)
+                                        audioRoute = AudioRouteOption.DETECT
+                                    }
+                                }
+                            }
+                        }
+                )
+        thread(name = "WyomingServer") { server.start() }
 
         // Add config change listeners
         config.eventBroadcaster.addListener(this)
@@ -133,9 +152,7 @@ internal class BackgroundTaskController (private val context: Context): EventLis
                 setVolume(AudioManager.STREAM_MUSIC, event.newValue as Float)
             }
             "wakeWord" -> {
-                scope.launch {
-                    restartWakeWordDetection()
-                }
+                scope.launch { restartWakeWordDetection() }
             }
             "doNotDisturb" -> {
                 setDoNotDisturb(event.newValue as Boolean)
@@ -152,21 +169,33 @@ internal class BackgroundTaskController (private val context: Context): EventLis
             }
             "currentPath" -> {
                 server.sendStatus(
-                    buildJsonObject {
-                        putJsonObject("sensors", {
-                            put("current_path", event.newValue.toString())
-                        })
-                    }
+                        buildJsonObject {
+                            putJsonObject("sensors") {
+                                put("current_path", event.newValue.toString())
+                            }
+                            putJsonObject("attributes") {
+                                put("mode", if (config.musicPlaying) "music" else "normal")
+                            }
+                        }
                 )
+            }
+            "musicPlaying" -> {
+                val musicPlaying = event.newValue as Boolean
+                server.sendStatus(
+                        buildJsonObject {
+                            putJsonObject("sensors") { put("music_playing", musicPlaying) }
+                            putJsonObject("attributes") {
+                                put("mode", if (musicPlaying) "music" else "normal")
+                            }
+                        }
+                )
+                // Send media player state through Wyoming protocol
+                server.sendMediaPlayerState(if (musicPlaying) "playing" else "idle")
             }
             "screenOn" -> {
                 val state = event.newValue as Boolean
                 server.sendStatus(
-                    buildJsonObject {
-                        putJsonObject("sensors", {
-                            put("screen_on", state)
-                        })
-                    }
+                        buildJsonObject { putJsonObject("sensors", { put("screen_on", state) }) }
                 )
             }
             "enableMotionDetection" -> {
@@ -179,21 +208,22 @@ internal class BackgroundTaskController (private val context: Context): EventLis
             }
             "lastMotion" -> {
                 server.sendStatus(
-                    buildJsonObject {
-                        putJsonObject("sensors", {
-                            put("motion_detected", true)
-                            put("last_motion", config.lastMotion)
-                        })
-                    }
+                        buildJsonObject {
+                            putJsonObject(
+                                    "sensors",
+                                    {
+                                        put("motion_detected", true)
+                                        put("last_motion", config.lastMotion)
+                                    }
+                            )
+                        }
                 )
             }
             "lastActivity" -> {
                 server.sendStatus(
-                    buildJsonObject {
-                        putJsonObject("sensors", {
-                            put("last_activity", config.lastActivity)
-                        })
-                    }
+                        buildJsonObject {
+                            putJsonObject("sensors", { put("last_activity", config.lastActivity) })
+                        }
                 )
             }
             "motionDetectionSensitivity" -> {
@@ -211,23 +241,27 @@ internal class BackgroundTaskController (private val context: Context): EventLis
     }
 
     fun startSensors(context: Context) {
-        sensorRunner = Sensors(context, object : SensorUpdatesCallback {
-            override fun onUpdate(data: MutableMap<String, Any>) {
-                val data = buildJsonObject {
-                    put("timestamp", Date().toString())
-                    putJsonObject("sensors") {
-                        data.map { (key, value) ->
-                            if (Helpers.isNumber(value.toString())) {
-                                put(key, value.toString().toFloat())
-                            } else {
-                                put(key, value.toString())
+        sensorRunner =
+                Sensors(
+                        context,
+                        object : SensorUpdatesCallback {
+                            override fun onUpdate(data: MutableMap<String, Any>) {
+                                val data = buildJsonObject {
+                                    put("timestamp", Date().toString())
+                                    putJsonObject("sensors") {
+                                        data.map { (key, value) ->
+                                            if (Helpers.isNumber(value.toString())) {
+                                                put(key, value.toString().toFloat())
+                                            } else {
+                                                put(key, value.toString())
+                                            }
+                                        }
+                                    }
+                                }
+                                server.sendStatus(data)
                             }
                         }
-                    }
-                }
-                server.sendStatus(data)
-            }
-        })
+                )
         // Start motion sensor
         if (config.enableMotionDetection) {
             motionTask.startCamera()
@@ -242,39 +276,34 @@ internal class BackgroundTaskController (private val context: Context): EventLis
     fun startInputAudio() {
         val audioRecorder = AudioRecorder(context)
         if (audioRecorder.hasRecordPermission()) {
-            audioInJob = scope.launch {
-                audioRecorder.startRecording()
-                    .collect { audioBuffer ->
-                        var audioLevel = 0f
+            audioInJob =
+                    scope.launch {
+                        audioRecorder.startRecording().collect { audioBuffer ->
+                            var audioLevel = 0f
 
-                        if (!config.isMuted) {
-                            if (wakeWordEngine != null) wakeWordEngine!!.processAudio(
-                                audioBuffer
-                            )
-                            when (audioRoute) {
-                                AudioRouteOption.NONE, AudioRouteOption.DETECT -> {
-                                    audioLevel = audioBuffer.max()
+                            if (!config.isMuted) {
+                                if (wakeWordEngine != null)
+                                        wakeWordEngine!!.processAudio(audioBuffer)
+                                when (audioRoute) {
+                                    AudioRouteOption.NONE, AudioRouteOption.DETECT -> {
+                                        audioLevel = audioBuffer.max()
+                                    }
+                                    AudioRouteOption.STREAM -> {
+                                        val gAudioBuffer =
+                                                audioDSP.autoGain(audioBuffer, config.micGain)
+                                        val bAudioBuffer =
+                                                audioDSP.floatArrayToByteBuffer(gAudioBuffer)
+                                        server.sendAudio(bAudioBuffer)
+                                        audioLevel = gAudioBuffer.max()
+                                    }
+                                    else -> {}
                                 }
-
-                                AudioRouteOption.STREAM -> {
-                                    val gAudioBuffer =
-                                        audioDSP.autoGain(audioBuffer, config.micGain)
-                                    val bAudioBuffer = audioDSP.floatArrayToByteBuffer(gAudioBuffer)
-                                    server.sendAudio(bAudioBuffer)
-                                    audioLevel = gAudioBuffer.max()
-                                }
-
-                                else -> {}
+                            }
+                            if (config.diagnosticsEnabled) {
+                                sendDiagnostics(audioLevel, lastWakeWordDetectionScore)
                             }
                         }
-                        if (config.diagnosticsEnabled) {
-                            sendDiagnostics(
-                                audioLevel,
-                                lastWakeWordDetectionScore
-                            )
-                        }
                     }
-            }
         }
     }
 
@@ -287,14 +316,15 @@ internal class BackgroundTaskController (private val context: Context): EventLis
     }
 
     fun sendDiagnostics(audioLevel: Float, detectionLevel: Float) {
-        val data = DiagnosticInfo(
-            show = config.diagnosticsEnabled,
-            audioLevel = audioLevel * 100,
-            detectionLevel = detectionLevel * 10,
-            detectionThreshold = config.wakeWordThreshold * 10,
-            wakeWord = config.wakeWord,
-            mode = audioRoute
-        )
+        val data =
+                DiagnosticInfo(
+                        show = config.diagnosticsEnabled,
+                        audioLevel = audioLevel * 100,
+                        detectionLevel = detectionLevel * 10,
+                        detectionThreshold = config.wakeWordThreshold * 10,
+                        wakeWord = config.wakeWord,
+                        mode = audioRoute
+                )
         val event = Event("diagnosticStats", "", data)
         config.eventBroadcaster.notifyEvent(event)
     }
@@ -308,7 +338,6 @@ internal class BackgroundTaskController (private val context: Context): EventLis
         stopOpenWakeWordDetection()
         stopSensors()
         server.stop()
-
     }
 
     private fun startOpenWakeWordDetection() {
@@ -320,59 +349,77 @@ internal class BackgroundTaskController (private val context: Context): EventLis
         val wakeWords = WakeWords(context).getWakeWords()
         if (config.wakeWord in wakeWords.keys) {
             val wakeWordInfo = wakeWords[config.wakeWord]!!
-            val models = listOf(
-                WakeWordModel(name = wakeWordInfo.name, modelPath = wakeWordInfo.fileName, builtIn = wakeWordInfo.builtIn, threshold = config.wakeWordThreshold)
-            )
+            val models =
+                    listOf(
+                            WakeWordModel(
+                                    name = wakeWordInfo.name,
+                                    modelPath = wakeWordInfo.fileName,
+                                    builtIn = wakeWordInfo.builtIn,
+                                    threshold = config.wakeWordThreshold
+                            )
+                    )
             Timber.i("Starting wake word detection with params: $models")
-            wakeWordEngine = WakeWordEngine(
-                context = context,
-                models = models,
-                detectionMode = DetectionMode.SINGLE_BEST,
-                detectionCooldownMs = 1500L,
-                scope = CoroutineScope(Dispatchers.Default)
-            )
+            wakeWordEngine =
+                    WakeWordEngine(
+                            context = context,
+                            models = models,
+                            detectionMode = DetectionMode.SINGLE_BEST,
+                            detectionCooldownMs = 1500L,
+                            scope = CoroutineScope(Dispatchers.Default)
+                    )
             Timber.i("Wake word detection started")
             audioRoute = AudioRouteOption.DETECT
 
-            wakeWordJob = scope.launch {
-                wakeWordEngine?.detections?.collect { detection ->
-                    if (audioRoute == AudioRouteOption.DETECT) {
-                        Timber.i("${detection.model.name} wake word detected at ${detection.score}, theshold is ${config.wakeWordThreshold}")
-                        firebase.logEvent(
-                            FirebaseManager.WAKE_WORD_DETECTED, mapOf(
-                                "wake_word" to config.wakeWord,
-                                "threshold" to config.wakeWordThreshold.toString(),
-                                "prediction" to detection.score.toString()
-                            )
-                        )
-                        // if wake up on ww, send event
-                        if (config.screenOnWakeWord) {
-                            config.eventBroadcaster.notifyEvent(Event("screenWake", "", ""))
-                        }
+            wakeWordJob =
+                    scope.launch {
+                        wakeWordEngine?.detections?.collect { detection ->
+                            if (audioRoute == AudioRouteOption.DETECT) {
+                                Timber.i(
+                                        "${detection.model.name} wake word detected at ${detection.score}, theshold is ${config.wakeWordThreshold}"
+                                )
+                                firebase.logEvent(
+                                        FirebaseManager.WAKE_WORD_DETECTED,
+                                        mapOf(
+                                                "wake_word" to config.wakeWord,
+                                                "threshold" to config.wakeWordThreshold.toString(),
+                                                "prediction" to detection.score.toString()
+                                        )
+                                )
+                                // if wake up on ww, send event
+                                if (config.screenOnWakeWord) {
+                                    config.eventBroadcaster.notifyEvent(Event("screenWake", "", ""))
+                                }
 
-                        if (config.wakeWordSound != "none") {
-                            try {
-                                WakeWordSoundPlayer(
-                                    context,
-                                    context.resources.getIdentifier(
-                                        config.wakeWordSound,
-                                        "raw",
-                                        context.packageName
-                                    )
-                                ).play()
-                            } catch (e: Exception) {
-                                Timber.e("Error playing wake word sound: ${e.message.toString()}")
+                                if (config.wakeWordSound != "none") {
+                                    try {
+                                        WakeWordSoundPlayer(
+                                                        context,
+                                                        context.resources.getIdentifier(
+                                                                config.wakeWordSound,
+                                                                "raw",
+                                                                context.packageName
+                                                        )
+                                                )
+                                                .play()
+                                    } catch (e: Exception) {
+                                        Timber.e(
+                                                "Error playing wake word sound: ${e.message.toString()}"
+                                        )
+                                    }
+                                }
+                                BroadcastSender.sendBroadcast(
+                                        context,
+                                        BroadcastSender.WAKE_WORD_DETECTED
+                                )
                             }
                         }
-                        BroadcastSender.sendBroadcast(context, BroadcastSender.WAKE_WORD_DETECTED)
                     }
-                }
-            }
-            detectionScoreMonitorJob = scope.launch {
-                wakeWordEngine?.scores?.collect { score ->
-                    holdLastDetectionLevel(score.score)
-                }
-            }
+            detectionScoreMonitorJob =
+                    scope.launch {
+                        wakeWordEngine?.scores?.collect { score ->
+                            holdLastDetectionLevel(score.score)
+                        }
+                    }
         }
     }
 
@@ -382,12 +429,13 @@ internal class BackgroundTaskController (private val context: Context): EventLis
             if (holdDetectionLevelJob != null && holdDetectionLevelJob!!.isActive) {
                 holdDetectionLevelJob?.cancel()
             }
-            holdDetectionLevelJob = scope.launch {
-                delay(duration)
-                if (audioRoute == AudioRouteOption.DETECT) {
-                    lastWakeWordDetectionScore = 0f
-                }
-            }
+            holdDetectionLevelJob =
+                    scope.launch {
+                        delay(duration)
+                        if (audioRoute == AudioRouteOption.DETECT) {
+                            lastWakeWordDetectionScore = 0f
+                        }
+                    }
         }
     }
 
@@ -396,7 +444,6 @@ internal class BackgroundTaskController (private val context: Context): EventLis
         stopOpenWakeWordDetection()
         startOpenWakeWordDetection()
     }
-
 
     private fun stopOpenWakeWordDetection() {
         Timber.i("Stopping wake word detection")
@@ -429,24 +476,31 @@ internal class BackgroundTaskController (private val context: Context): EventLis
     }
 
     fun setDoNotDisturb(enable: Boolean) {
-        val notificationManager =  context.getSystemService(NOTIFICATION_SERVICE) as NotificationManager
-        val isInDND = notificationManager.currentInterruptionFilter != NotificationManager.INTERRUPTION_FILTER_ALL
+        val notificationManager =
+                context.getSystemService(NOTIFICATION_SERVICE) as NotificationManager
+        val isInDND =
+                notificationManager.currentInterruptionFilter !=
+                        NotificationManager.INTERRUPTION_FILTER_ALL
         if (isInDND != enable) {
             if (notificationManager.isNotificationPolicyAccessGranted) {
                 Timber.d("Setting do not disturb to $enable")
                 if (enable) {
-                    notificationManager.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_NONE)
+                    notificationManager.setInterruptionFilter(
+                            NotificationManager.INTERRUPTION_FILTER_NONE
+                    )
                 } else {
-                    notificationManager.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_ALL)
+                    notificationManager.setInterruptionFilter(
+                            NotificationManager.INTERRUPTION_FILTER_ALL
+                    )
                 }
             } else {
                 Timber.w("Unable to set do not disturb, notification policy access not granted")
                 config.eventBroadcaster.notifyEvent(
-                    Event(
-                        "showToastMessage",
-                        "",
-                        "Unable to set do not disturb.  Permission not granted."
-                    )
+                        Event(
+                                "showToastMessage",
+                                "",
+                                "Unable to set do not disturb.  Permission not granted."
+                        )
                 )
             }
         }

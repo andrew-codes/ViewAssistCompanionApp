@@ -6,19 +6,19 @@ import android.content.SharedPreferences
 import android.os.Build
 import android.os.Build.UNKNOWN
 import android.provider.Settings.Secure
-import androidx.preference.PreferenceManager
 import androidx.core.content.edit
+import androidx.preference.PreferenceManager
 import com.google.android.gms.common.util.ClientLibraryUtils.getPackageInfo
 import com.google.firebase.Firebase
 import com.google.firebase.crashlytics.crashlytics
 import com.msp1974.vacompanion.utils.Event
 import com.msp1974.vacompanion.utils.EventNotifier
 import com.msp1974.vacompanion.utils.Logger
-import org.json.JSONObject
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.properties.Delegates
 import kotlin.reflect.KProperty
+import org.json.JSONObject
 
 enum class BackgroundTaskStatus {
     NOT_STARTED,
@@ -36,15 +36,17 @@ enum class PageLoadingStage {
 }
 
 class APPConfig(val context: Context) {
-    private val sharedPrefs = PreferenceManager.getDefaultSharedPreferences(context.applicationContext)
+    private val sharedPrefs =
+            PreferenceManager.getDefaultSharedPreferences(context.applicationContext)
     private val log = Logger()
     var eventBroadcaster: EventNotifier
     private var prefListener: Unit
 
     init {
-        prefListener = sharedPrefs.registerOnSharedPreferenceChangeListener { prefs, key ->
-            onSharedPreferenceChangedListener(prefs, key)
-        }
+        prefListener =
+                sharedPrefs.registerOnSharedPreferenceChangeListener { prefs, key ->
+                    onSharedPreferenceChangedListener(prefs, key)
+                }
         eventBroadcaster = EventNotifier()
     }
 
@@ -57,19 +59,19 @@ class APPConfig(val context: Context) {
     var integrationVersion: String = "0.0.0"
     var minRequiredApkVersion: String = version
 
-
     // In memory only settings
     var initSettings: Boolean = false
     var homeAssistantConnectedIP: String = ""
     var homeAssistantHTTPPort: Int = DEFAULT_HA_HTTP_PORT
     var homeAssistantURL: String = ""
     var homeAssistantDashboard: String = ""
+    var directURL: String = "https://games.smith-simms.family/u/jimbruskalski/Library%3A1/on-deck"
 
     var sampleRate: Int = 16000
     var audioChannels: Int = 1
     var audioWidth: Int = 2
 
-    //var connectionCount: Int = 0
+    // var connectionCount: Int = 0
     var atomicConnectionCount: AtomicInteger = AtomicInteger(0)
     var currentActivity: String = ""
     var backgroundTaskRunning: Boolean = false
@@ -83,129 +85,162 @@ class APPConfig(val context: Context) {
 
     var ignoreSSLErrors: Boolean = alwaysIgnoreSSLErrors
 
-    //In memory settings with change notification
-    var wakeWord: String by Delegates.observable(DEFAULT_WAKE_WORD) { property, oldValue, newValue ->
-        onValueChangedListener(property, oldValue, newValue)
-    }
+    // In memory settings with change notification
+    var wakeWord: String by
+            Delegates.observable(DEFAULT_WAKE_WORD) { property, oldValue, newValue ->
+                onValueChangedListener(property, oldValue, newValue)
+            }
 
-    var wakeWordSound: String by Delegates.observable(DEFAULT_WAKE_WORD_SOUND) { property, oldValue, newValue ->
-        onValueChangedListener(property, oldValue, newValue)
-    }
+    var wakeWordSound: String by
+            Delegates.observable(DEFAULT_WAKE_WORD_SOUND) { property, oldValue, newValue ->
+                onValueChangedListener(property, oldValue, newValue)
+            }
 
-    var wakeWordThreshold: Float by Delegates.observable(DEFAULT_WAKE_WORD_THRESHOLD) { property, oldValue, newValue ->
-        onValueChangedListener(property, oldValue, newValue)
-    }
+    var wakeWordThreshold: Float by
+            Delegates.observable(DEFAULT_WAKE_WORD_THRESHOLD) { property, oldValue, newValue ->
+                onValueChangedListener(property, oldValue, newValue)
+            }
 
-    var continueConversation: Boolean by Delegates.observable(true) { property, oldValue, newValue ->
-        onValueChangedListener(property, oldValue, newValue)
-    }
+    var continueConversation: Boolean by
+            Delegates.observable(true) { property, oldValue, newValue ->
+                onValueChangedListener(property, oldValue, newValue)
+            }
 
-    var notificationVolume: Float by Delegates.observable(DEFAULT_NOTIFICATION_VOLUME) { property, oldValue, newValue ->
-        onValueChangedListener(property, oldValue, newValue)
-    }
+    var notificationVolume: Float by
+            Delegates.observable(DEFAULT_NOTIFICATION_VOLUME) { property, oldValue, newValue ->
+                onValueChangedListener(property, oldValue, newValue)
+            }
 
-    var musicVolume: Float by Delegates.observable(DEFAULT_MUSIC_VOLUME) { property, oldValue, newValue ->
-        onValueChangedListener(property, oldValue, newValue)
-    }
+    var musicVolume: Float by
+            Delegates.observable(DEFAULT_MUSIC_VOLUME) { property, oldValue, newValue ->
+                onValueChangedListener(property, oldValue, newValue)
+            }
 
-    var duckingVolume: Float by Delegates.observable(DEFAULT_DUCKING_VOLUME) { property, oldValue, newValue ->
-        onValueChangedListener(property, oldValue, newValue)
-    }
+    var musicPlaying: Boolean by
+            Delegates.observable(false) { property, oldValue, newValue ->
+                onValueChangedListener(property, oldValue, newValue)
+            }
 
-    var isMuted: Boolean by Delegates.observable(DEFAULT_MUTE) { property, oldValue, newValue ->
-        onValueChangedListener(property, oldValue, newValue)
-    }
+    var duckingVolume: Float by
+            Delegates.observable(DEFAULT_DUCKING_VOLUME) { property, oldValue, newValue ->
+                onValueChangedListener(property, oldValue, newValue)
+            }
 
-    var micGain: Int by Delegates.observable(DEFAULT_MIC_GAIN) { property, oldValue, newValue ->
-        onValueChangedListener(property, oldValue, newValue)
-    }
+    var isMuted: Boolean by
+            Delegates.observable(DEFAULT_MUTE) { property, oldValue, newValue ->
+                onValueChangedListener(property, oldValue, newValue)
+            }
 
-    var screenBrightness: Float by Delegates.observable(DEFAULT_SCREEN_BRIGHTNESS) { property, oldValue, newValue ->
-        onValueChangedListener(property, oldValue, newValue)
-    }
+    var micGain: Int by
+            Delegates.observable(DEFAULT_MIC_GAIN) { property, oldValue, newValue ->
+                onValueChangedListener(property, oldValue, newValue)
+            }
 
-    var screenAutoBrightness: Boolean by Delegates.observable(DEFAULT_SCREEN_AUTO_BRIGHTNESS) { property, oldValue, newValue ->
-        onValueChangedListener(property, oldValue, newValue)
-    }
+    var screenBrightness: Float by
+            Delegates.observable(DEFAULT_SCREEN_BRIGHTNESS) { property, oldValue, newValue ->
+                onValueChangedListener(property, oldValue, newValue)
+            }
 
-    var swipeRefresh: Boolean by Delegates.observable(DEFAULT_SWIPE_REFRESH) { property, oldValue, newValue ->
-        onValueChangedListener(property, oldValue, newValue)
-    }
+    var screenAutoBrightness: Boolean by
+            Delegates.observable(DEFAULT_SCREEN_AUTO_BRIGHTNESS) { property, oldValue, newValue ->
+                onValueChangedListener(property, oldValue, newValue)
+            }
 
-    var screenAlwaysOn: Boolean by Delegates.observable(false) { property, oldValue, newValue ->
-        onValueChangedListener(property, oldValue, newValue)
-    }
+    var swipeRefresh: Boolean by
+            Delegates.observable(DEFAULT_SWIPE_REFRESH) { property, oldValue, newValue ->
+                onValueChangedListener(property, oldValue, newValue)
+            }
 
-    var doNotDisturb: Boolean by Delegates.observable(false) { property, oldValue, newValue ->
-        onValueChangedListener(property, oldValue, newValue)
-    }
+    var screenAlwaysOn: Boolean by
+            Delegates.observable(false) { property, oldValue, newValue ->
+                onValueChangedListener(property, oldValue, newValue)
+            }
 
-    var darkMode: Boolean by Delegates.observable(false) { property, oldValue, newValue ->
-        onValueChangedListener(property, oldValue, newValue)
-    }
+    var doNotDisturb: Boolean by
+            Delegates.observable(false) { property, oldValue, newValue ->
+                onValueChangedListener(property, oldValue, newValue)
+            }
 
-    var diagnosticsEnabled: Boolean by Delegates.observable(false) { property, oldValue, newValue ->
-        onValueChangedListener(property, oldValue, newValue)
-    }
+    var darkMode: Boolean by
+            Delegates.observable(false) { property, oldValue, newValue ->
+                onValueChangedListener(property, oldValue, newValue)
+            }
 
-    var pairedDeviceID: String by Delegates.observable(pairedDeviceId) { property, oldValue, newValue ->
-        pairedDeviceId = newValue
-        onValueChangedListener(property, oldValue, newValue)
-    }
+    var diagnosticsEnabled: Boolean by
+            Delegates.observable(false) { property, oldValue, newValue ->
+                onValueChangedListener(property, oldValue, newValue)
+            }
 
-    var zoomLevel: Int by Delegates.observable(0) { property, oldValue, newValue ->
-        onValueChangedListener(property, oldValue, newValue)
-    }
+    var pairedDeviceID: String by
+            Delegates.observable(pairedDeviceId) { property, oldValue, newValue ->
+                pairedDeviceId = newValue
+                onValueChangedListener(property, oldValue, newValue)
+            }
 
-    var screenOnWakeWord: Boolean by Delegates.observable(false) { property, oldValue, newValue ->
-        onValueChangedListener(property, oldValue, newValue)
-    }
+    var zoomLevel: Int by
+            Delegates.observable(0) { property, oldValue, newValue ->
+                onValueChangedListener(property, oldValue, newValue)
+            }
 
-    var screenOnBump: Boolean by Delegates.observable(false) { property, oldValue, newValue ->
-        onValueChangedListener(property, oldValue, newValue)
-    }
+    var screenOnWakeWord: Boolean by
+            Delegates.observable(false) { property, oldValue, newValue ->
+                onValueChangedListener(property, oldValue, newValue)
+            }
 
-    var screenOnProximity: Boolean by Delegates.observable(false) { property, oldValue, newValue ->
-        onValueChangedListener(property, oldValue, newValue)
-    }
+    var screenOnBump: Boolean by
+            Delegates.observable(false) { property, oldValue, newValue ->
+                onValueChangedListener(property, oldValue, newValue)
+            }
 
-    var screenOnMotion: Boolean by Delegates.observable(true) { property, oldValue, newValue ->
-        onValueChangedListener(property, oldValue, newValue)
-    }
+    var screenOnProximity: Boolean by
+            Delegates.observable(false) { property, oldValue, newValue ->
+                onValueChangedListener(property, oldValue, newValue)
+            }
 
-    var screenOn: Boolean by Delegates.observable(false) { property, oldValue, newValue ->
-        onValueChangedListener(property, oldValue, newValue)
-    }
+    var screenOnMotion: Boolean by
+            Delegates.observable(true) { property, oldValue, newValue ->
+                onValueChangedListener(property, oldValue, newValue)
+            }
 
-    var enableNetworkRecovery: Boolean by Delegates.observable(true) { property, oldValue, newValue ->
-        onValueChangedListener(property, oldValue, newValue)
-    }
+    var screenOn: Boolean by
+            Delegates.observable(false) { property, oldValue, newValue ->
+                onValueChangedListener(property, oldValue, newValue)
+            }
 
-    var enableMotionDetection: Boolean by Delegates.observable(false) { property, oldValue, newValue ->
-        onValueChangedListener(property, oldValue, newValue)
-    }
+    var enableNetworkRecovery: Boolean by
+            Delegates.observable(true) { property, oldValue, newValue ->
+                onValueChangedListener(property, oldValue, newValue)
+            }
 
-    var motionDetectionSensitivity: Int by Delegates.observable(0) { property, oldValue, newValue ->
-        onValueChangedListener(property, oldValue, newValue)
-    }
+    var enableMotionDetection: Boolean by
+            Delegates.observable(false) { property, oldValue, newValue ->
+                onValueChangedListener(property, oldValue, newValue)
+            }
 
-    var currentPath: String by Delegates.observable("") { property, oldValue, newValue ->
-        onValueChangedListener(property, oldValue, newValue)
-    }
+    var motionDetectionSensitivity: Int by
+            Delegates.observable(0) { property, oldValue, newValue ->
+                onValueChangedListener(property, oldValue, newValue)
+            }
 
-    var lastMotion: String by Delegates.observable("") { property, oldValue, newValue ->
-        onValueChangedListener(property, oldValue, newValue)
-    }
+    var currentPath: String by
+            Delegates.observable("") { property, oldValue, newValue ->
+                onValueChangedListener(property, oldValue, newValue)
+            }
 
-    var lastActivity: Long by Delegates.observable(0) { property, oldValue, newValue ->
-        onValueChangedListener(property, oldValue, newValue)
-    }
+    var lastMotion: String by
+            Delegates.observable("") { property, oldValue, newValue ->
+                onValueChangedListener(property, oldValue, newValue)
+            }
 
-    var screenTimeout: Int by Delegates.observable(3000) { property, oldValue, newValue ->
-        onValueChangedListener(property, oldValue, newValue)
-    }
+    var lastActivity: Long by
+            Delegates.observable(0) { property, oldValue, newValue ->
+                onValueChangedListener(property, oldValue, newValue)
+            }
 
-
+    var screenTimeout: Int by
+            Delegates.observable(3000) { property, oldValue, newValue ->
+                onValueChangedListener(property, oldValue, newValue)
+            }
 
     // SharedPreferences
     var canSetScreenWritePermission: Boolean
@@ -214,7 +249,8 @@ class APPConfig(val context: Context) {
 
     var canSetNotificationPolicyAccess: Boolean
         get() = this.sharedPrefs.getBoolean("can_set_notification_policy_access", true)
-        set(value) = this.sharedPrefs.edit { putBoolean("can_set_notification_policy_access", value) }
+        set(value) =
+                this.sharedPrefs.edit { putBoolean("can_set_notification_policy_access", value) }
 
     var startOnBoot: Boolean
         get() = this.sharedPrefs.getBoolean("startOnBoot", false)
@@ -255,6 +291,9 @@ class APPConfig(val context: Context) {
         }
         if (settings.has("ha_dashboard")) {
             homeAssistantDashboard = settings["ha_dashboard"] as String
+        }
+        if (settings.has("direct_url")) {
+            directURL = settings["direct_url"] as String
         }
         if (settings.has("wake_word")) {
             wakeWord = settings["wake_word"] as String
@@ -358,7 +397,6 @@ class APPConfig(val context: Context) {
         }
         val uid = UUID.randomUUID().toString()
         return uid.slice(0..8)
-
     }
 
     fun onSharedPreferenceChangedListener(prefs: SharedPreferences, key: String?) {
@@ -391,15 +429,16 @@ class APPConfig(val context: Context) {
         const val DEFAULT_DUCKING_VOLUME = 0.1f
         const val DEFAULT_MUTE = false
         const val DEFAULT_MIC_GAIN = 0
-        const val GITHUB_API_URL = "https://api.github.com/repos/msp1974/ViewAssist_Companion_App/releases"
+        const val GITHUB_API_URL =
+                "https://api.github.com/repos/msp1974/ViewAssist_Companion_App/releases"
         const val ENABLE_UPDATER = true
 
-        @Volatile
-        private var instance: APPConfig? = null
+        @Volatile private var instance: APPConfig? = null
 
         fun getInstance(context: Context) =
-            instance ?: synchronized(this) {
-                instance ?: APPConfig(context).also { instance = it }
-            }
+                instance
+                        ?: synchronized(this) {
+                            instance ?: APPConfig(context).also { instance = it }
+                        }
     }
 }
