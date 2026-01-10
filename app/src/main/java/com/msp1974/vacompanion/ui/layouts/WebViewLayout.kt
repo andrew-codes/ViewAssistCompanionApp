@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -33,7 +34,27 @@ fun WebViewScreen(
         externalWebView: WebView,
         vaViewModel: VAViewModel = viewModel()
 ) {
+    // FIRST THING - log that we're called
+    android.util.Log.e("WebViewScreen", "!!! WebViewScreen CALLED !!!")
+    android.util.Log.e("WebViewScreen", "!!! HA WebView: ${haWebView.url}")
+    android.util.Log.e("WebViewScreen", "!!! External WebView: ${externalWebView.url}")
+
     val vaUiState by vaViewModel.vacaState.collectAsState()
+
+    // Log the state value
+    android.util.Log.e("WebViewScreen", "!!! showingHAView state: ${vaUiState.showingHAView}")
+
+    // Log visibility changes
+    LaunchedEffect(vaUiState.showingHAView) {
+        android.util.Log.d("WebViewScreen", "=== WebView Visibility Changed ===")
+        android.util.Log.d("WebViewScreen", "  showingHAView: ${vaUiState.showingHAView}")
+        android.util.Log.d("WebViewScreen", "  Visible WebView: ${if (vaUiState.showingHAView) "HA WebView" else "External WebView"}")
+        android.util.Log.d("WebViewScreen", "  HA WebView URL: ${haWebView.url}")
+        android.util.Log.d("WebViewScreen", "  External WebView URL: ${externalWebView.url}")
+    }
+
+    // Log every recomposition
+    android.util.Log.d("WebViewScreen", ">>> RECOMPOSING WebViewScreen - showingHAView: ${vaUiState.showingHAView}")
 
     Box(modifier = Modifier.fillMaxSize()) {
         var containerModifier =
@@ -48,23 +69,23 @@ fun WebViewScreen(
         }
 
         Box(modifier = containerModifier) {
-            // External WebView - visible when showingHAView is false
-            Box(modifier = Modifier.fillMaxSize()) {
-                WebViewWrapper(
-                        webView = externalWebView,
-                        modifier = Modifier.fillMaxSize(),
-                        swipeRefreshEnabled = vaViewModel.config!!.swipeRefresh,
-                        isVisible = !vaUiState.showingHAView
-                )
-            }
-
-            // HA WebView - visible when showingHAView is true
+            // HA WebView - declared FIRST (bottom layer when both visible)
             Box(modifier = Modifier.fillMaxSize()) {
                 WebViewWrapper(
                         webView = haWebView,
                         modifier = Modifier.fillMaxSize(),
                         swipeRefreshEnabled = vaViewModel.config!!.swipeRefresh,
                         isVisible = vaUiState.showingHAView
+                )
+            }
+
+            // External WebView - declared SECOND (top layer, will be on top if both visible)
+            Box(modifier = Modifier.fillMaxSize()) {
+                WebViewWrapper(
+                        webView = externalWebView,
+                        modifier = Modifier.fillMaxSize(),
+                        swipeRefreshEnabled = vaViewModel.config!!.swipeRefresh,
+                        isVisible = !vaUiState.showingHAView
                 )
             }
         }
@@ -99,6 +120,7 @@ fun WebViewWrapper(
     AndroidView(
             modifier = modifier.fillMaxSize(),
             factory = { context ->
+                android.util.Log.d("WebViewWrapper", "FACTORY: Creating wrapper for WebView: ${webView.url}, isVisible: $isVisible")
                 SwipeRefreshLayout(context).apply {
                     setOnRefreshListener {
                         refreshScope.launch {
@@ -112,26 +134,59 @@ fun WebViewWrapper(
                         (webView.parent as ViewGroup).removeView(webView)
                     }
                     addView(webView).apply { tag = "vaWebView" }
+
+                    // Set initial visibility in factory
+                    val initialVisibility = if (isVisible) android.view.View.VISIBLE else android.view.View.GONE
+                    visibility = initialVisibility
+                    webView.visibility = initialVisibility
+                    android.util.Log.d("WebViewWrapper", "FACTORY: Set initial visibility to ${if (isVisible) "VISIBLE" else "GONE"} for ${webView.url}")
                 }
             },
             update = { view ->
                 view.isRefreshing = refreshing
                 view.isEnabled = swipeRefreshEnabled
-                // Control visibility at the SwipeRefreshLayout level to properly handle touch
-                // events
-                val newVisibility =
-                        if (isVisible) android.view.View.VISIBLE else android.view.View.GONE
+
+                // Control visibility at the SwipeRefreshLayout level to properly handle touch events
+                val newVisibility = if (isVisible) android.view.View.VISIBLE else android.view.View.GONE
+
+                // Log EVERY update, not just changes
+                android.util.Log.e(
+                        "WebViewWrapper",
+                        "UPDATE: WebView ${webView.url} - isVisible param: $isVisible, setting to: ${if (newVisibility == android.view.View.VISIBLE) "VISIBLE" else "GONE"}"
+                )
+
                 if (view.visibility != newVisibility) {
-                    android.util.Log.d(
+                    android.util.Log.e(
                             "WebViewWrapper",
-                            "Changing view visibility to ${if (isVisible) "VISIBLE" else "GONE"}, URL: ${webView.url}"
+                            "=== VISIBILITY ACTUALLY CHANGING ==="
+                    )
+                    android.util.Log.e(
+                            "WebViewWrapper",
+                            "WebView URL: ${webView.url}"
+                    )
+                    android.util.Log.e(
+                            "WebViewWrapper",
+                            "Old visibility: ${if (view.visibility == android.view.View.VISIBLE) "VISIBLE" else "GONE"}"
+                    )
+                    android.util.Log.e(
+                            "WebViewWrapper",
+                            "New visibility: ${if (isVisible) "VISIBLE" else "GONE"}"
                     )
                 }
+
+                // Set visibility on both the container and the WebView itself
                 view.visibility = newVisibility
+                webView.visibility = newVisibility
 
                 // Also set clickable state to prevent touch event blocking
                 view.isClickable = isVisible
                 view.isFocusable = isVisible
+                webView.isClickable = isVisible
+                webView.isFocusable = isVisible
+
+                // Force the view to request layout
+                view.requestLayout()
+                webView.requestLayout()
             }
     )
 }

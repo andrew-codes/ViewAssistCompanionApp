@@ -54,6 +54,18 @@ class AuthUtils(val config: APPConfig) {
                                 return@post
                             }
 
+                            // Check if this URL is actually a Home Assistant page
+                            // Any URL on the HA domain should authenticate
+                            val isActualHAPage = isHomeAssistantMode(currentUrl, config)
+
+                            if (!isActualHAPage) {
+                                log.d("URL is not on HA domain - skipping authentication: $currentUrl")
+                                setAuthStage(view, PageLoadingStage.LOADED)
+                                return@post
+                            }
+
+                            log.d("URL is on HA domain - proceeding with authentication: $currentUrl")
+
                             // If getExternalAuth() is being called, it means HA's page has loaded
                             // and is requesting auth
                             // We should always handle this when HA is configured
@@ -266,28 +278,24 @@ class AuthUtils(val config: APPConfig) {
         }
 
         fun getAppropriateUrl(config: APPConfig, withDashboardPath: Boolean = true): String {
-            // If direct URL is configured, check if it's on the same domain as HA
+            log.d("=== getAppropriateUrl called ===")
+            log.d("  directURL: '${config.directURL}'")
+            log.d("  homeAssistantURL: '${config.homeAssistantURL}'")
+            log.d("  homeAssistantDashboard: '${config.homeAssistantDashboard}'")
+            log.d("  withDashboardPath: $withDashboardPath")
+
+            // If direct URL is configured, always use it
             if (config.directURL.isNotEmpty()) {
-                val directUri = config.directURL.toUri()
-                val haBaseUrl =
-                        if (config.homeAssistantURL.isNotEmpty()) {
-                            config.homeAssistantURL
-                        } else {
-                            "http://${config.homeAssistantConnectedIP}:${config.homeAssistantHTTPPort}"
-                        }
-                val haUri = haBaseUrl.toUri()
-
-                // If direct URL is NOT on the HA domain, use direct URL
-                if (directUri.host != haUri.host || directUri.port != haUri.port) {
-                    log.d("Direct URL is on different domain than HA - using direct URL")
-                    return config.directURL
-                }
-
-                log.d("Direct URL is on same domain as HA - using HA URL for proper integration")
+                log.d("Direct URL is configured - using: ${config.directURL}")
+                log.d("=== getAppropriateUrl returning directURL ===")
+                return config.directURL
             }
 
-            // Use HA URL (either no direct URL configured, or direct URL is on HA domain)
-            return getHAUrl(config, withDashboardPath)
+            // Use HA URL (no direct URL configured)
+            val haUrl = getHAUrl(config, withDashboardPath)
+            log.d("No direct URL configured - using HA URL: $haUrl")
+            log.d("=== getAppropriateUrl returning HA URL ===")
+            return haUrl
         }
 
         fun isHomeAssistantMode(config: APPConfig): Boolean {

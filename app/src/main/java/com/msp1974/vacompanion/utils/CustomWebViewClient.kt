@@ -108,15 +108,26 @@ class CustomWebViewClient(val viewModel: VAViewModel) : WebViewClientCompat() {
         Timber.d("Page finished loading: $url")
 
         // Check if this is an HA page or external URL
-        val isHAPage = url?.let { AuthUtils.isHomeAssistantMode(it, config) } ?: false
+        val isHADomain = url?.let { AuthUtils.isHomeAssistantMode(it, config) } ?: false
 
-        if (isHAPage) {
+        Timber.d("URL analysis - isHADomain: $isHADomain")
+
+        if (isHADomain) {
             // For HA pages, the auth callback will handle setting LOADED state
             // Don't set it here to avoid interfering with auth flow
-            Timber.d("HA page finished - auth callback will handle LOADED state")
+            Timber.d("HA domain page finished - auth callback will handle LOADED state")
+
+            // However, if we've been waiting too long and no auth callback happened,
+            // set LOADED state anyway to prevent perpetual black screen
+            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                if (viewModel.vacaState.value.webViewPageLoadingStage != PageLoadingStage.LOADED) {
+                    Timber.w("Auth callback didn't set LOADED state - forcing LOADED to prevent black screen")
+                    setPageLoadingState(PageLoadingStage.LOADED)
+                }
+            }, 2000) // Wait 2 seconds for auth callback
         } else {
-            // For non-HA pages (external URL), set LOADED immediately
-            Timber.d("Non-HA page finished - setting LOADED state")
+            // For non-HA pages (external URL on different domain), set LOADED immediately
+            Timber.d("Non-HA domain page finished - setting LOADED state immediately")
             setPageLoadingState(PageLoadingStage.LOADED)
         }
 
@@ -137,6 +148,24 @@ class CustomWebViewClient(val viewModel: VAViewModel) : WebViewClientCompat() {
         Timber.e("WebView error: Code=$errorCode, Description='$description', URL='$failingUrl'")
         log.e("WebView error: Code=$errorCode, Description='$description', URL='$failingUrl'")
         view.loadUrl("file:///android_asset/web/error.html")
+    }
+
+    override fun onReceivedHttpError(
+            view: WebView,
+            request: android.webkit.WebResourceRequest,
+            errorResponse: android.webkit.WebResourceResponse
+    ) {
+        super.onReceivedHttpError(view, request, errorResponse)
+        val url = request.url?.toString() ?: "unknown"
+        val statusCode = errorResponse.statusCode
+        val reasonPhrase = errorResponse.reasonPhrase ?: "unknown"
+        Timber.e("WebView HTTP error: Code=$statusCode, Reason='$reasonPhrase', URL='$url'")
+        log.e("WebView HTTP error: Code=$statusCode, Reason='$reasonPhrase', URL='$url'")
+
+        // If the main frame failed to load with an HTTP error, show error page
+        if (request.isForMainFrame && statusCode >= 400) {
+            view.loadUrl("file:///android_asset/web/error.html")
+        }
     }
 
     @SuppressLint("WebViewClientOnReceivedSslError")
@@ -199,9 +228,20 @@ class CustomWebViewClient(val viewModel: VAViewModel) : WebViewClientCompat() {
         Timber.d("URL '$url' is HA mode: $isHA")
 
         if (isHA) {
-            val newPath = URL(url).path
-            Timber.d("HA URL - updating path from '${config.currentPath}' to '$newPath'")
-            config.currentPath = newPath
+            // Only update currentPath if this WebView is currently visible
+            // Check if this is the active WebView based on showingHAView state
+            val isHAWebView = url.contains(config.homeAssistantDashboard) ||
+                             !url.contains(config.directURL.substringAfter(config.homeAssistantURL).removePrefix("/"))
+            val shouldUpdatePath = (isHAWebView && viewModel.vacaState.value.showingHAView) ||
+                                  (!isHAWebView && !viewModel.vacaState.value.showingHAView)
+
+            if (shouldUpdatePath) {
+                val newPath = URL(url).path
+                Timber.d("HA URL (visible WebView) - updating path from '${config.currentPath}' to '$newPath'")
+                config.currentPath = newPath
+            } else {
+                Timber.d("HA URL (invisible WebView) - NOT updating path, keeping: '${config.currentPath}'")
+            }
         } else {
             Timber.d("Non-HA URL - keeping currentPath unchanged: '${config.currentPath}'")
         }

@@ -65,7 +65,7 @@ class APPConfig(val context: Context) {
     var homeAssistantHTTPPort: Int = DEFAULT_HA_HTTP_PORT
     var homeAssistantURL: String = ""
     var homeAssistantDashboard: String = ""
-    var directURL: String = "https://games.smith-simms.family/u/jimbruskalski/Library%3A1/on-deck"
+    var directURL: String = ""
 
     var sampleRate: Int = 16000
     var audioChannels: Int = 1

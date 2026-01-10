@@ -163,7 +163,17 @@ class VAViewModel : ViewModel(), EventListener {
     }
 
     fun setShowingHAView(showHA: Boolean) {
-        Timber.d("Switching to ${if (showHA) "HA" else "External"} WebView")
+        val currentState = _vacaState.value.showingHAView
+        if (currentState != showHA) {
+            Timber.d("=== CHANGING WebView Visibility ===")
+            Timber.d("From: ${if (currentState) "HA" else "External"} -> To: ${if (showHA) "HA" else "External"}")
+            // Log the stack trace to see what's calling this
+            val stackTrace = Thread.currentThread().stackTrace
+            val caller = stackTrace.getOrNull(3)
+            Timber.d("Called from: ${caller?.className}.${caller?.methodName} (${caller?.fileName}:${caller?.lineNumber})")
+        } else {
+            Timber.d("Switching to ${if (showHA) "HA" else "External"} WebView (no change)")
+        }
         _vacaState.update { currentState -> currentState.copy(showingHAView = showHA) }
     }
 

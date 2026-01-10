@@ -309,6 +309,12 @@ class MainActivity : AppCompatActivity(), EventListener, ComponentCallbacks2 {
                     Timber.d("Broadcast received: ${intent.action}")
                     when (intent.action) {
                         BroadcastSender.SATELLITE_STARTED -> {
+                            log.d("=== SATELLITE_STARTED EVENT ===")
+                            log.d("Config - directURL: '${config.directURL}'")
+                            log.d("Config - homeAssistantURL: '${config.homeAssistantURL}'")
+                            log.d("Config - homeAssistantDashboard: '${config.homeAssistantDashboard}'")
+                            log.d("Config - homeAssistantConnectedIP: '${config.homeAssistantConnectedIP}'")
+
                             viewModel.setSatelliteRunning(true)
 
                             // Load HA WebView now that config is populated
@@ -318,6 +324,7 @@ class MainActivity : AppCompatActivity(), EventListener, ComponentCallbacks2 {
                             ) {
                                 log.d("Satellite started - loading HA WebView...")
                                 val haUrl = AuthUtils.getHAUrl(config, withDashboardPath = true)
+                                log.d("HA URL computed: $haUrl")
                                 val hasValidToken =
                                         config.accessToken.isNotEmpty() &&
                                                 config.tokenExpiry > System.currentTimeMillis()
@@ -334,6 +341,9 @@ class MainActivity : AppCompatActivity(), EventListener, ComponentCallbacks2 {
                                     log.d("Loading HA WebView auth URL (OAuth flow): $authUrl")
                                     haWebView.loadUrl(authUrl)
                                 }
+                            } else {
+                                log.d("Skipping HA WebView load - already loaded or HA not configured")
+                                log.d("  haWebView.url: ${haWebView.url}")
                             }
 
                             if (!screen.isScreenOn()) {
@@ -354,12 +364,17 @@ class MainActivity : AppCompatActivity(), EventListener, ComponentCallbacks2 {
                             config.screenOn = screen.isScreenOn()
 
                             // Load the default view (external URL) on startup
+                            log.d("Getting appropriate URL for external WebView...")
                             val defaultUrl = AuthUtils.getAppropriateUrl(config)
+                            log.d("Appropriate URL computed: $defaultUrl")
                             log.d("Loading default URL in external WebView: $defaultUrl")
+                            log.d("External WebView current URL before load: ${externalWebView.url}")
                             externalWebView.loadUrl(defaultUrl)
 
                             // Show external WebView by default
+                            log.d("Setting showingHAView to FALSE (show external WebView)")
                             viewModel.setShowingHAView(false)
+                            log.d("=== SATELLITE_STARTED EVENT COMPLETE ===")
                         }
                         BroadcastSender.SATELLITE_STOPPED -> {
                             viewModel.setSatelliteRunning(false)
@@ -713,6 +728,54 @@ class MainActivity : AppCompatActivity(), EventListener, ComponentCallbacks2 {
                     // Don't navigate immediately - the navigate-home timeout will handle
                     // returning to external view if music doesn't restart
                     log.d("Music stopped - waiting for navigate-home timeout or new music to start")
+                }
+                "pause-ha-media" -> {
+                    log.d("Pausing Home Assistant media player")
+                    haWebView.evaluateJavascript(
+                        """
+                        (function() {
+                            try {
+                                // Pause all HTML5 audio and video elements
+                                document.querySelectorAll('audio, video').forEach(el => el.pause());
+                                
+                                // Call Home Assistant service to pause all media players
+                                if (window.hassConnection) {
+                                    window.hassConnection.then(hass => {
+                                        hass.callService('media_player', 'media_pause', {entity_id: 'all'});
+                                    });
+                                }
+                            } catch(e) {
+                                console.log('Error pausing media:', e);
+                            }
+                        })();
+                        """.trimIndent(),
+                        null
+                    )
+                }
+                "resume-ha-media" -> {
+                    log.d("Resuming Home Assistant media player")
+                    haWebView.evaluateJavascript(
+                        """
+                        (function() {
+                            try {
+                                // Resume all paused HTML5 audio and video elements
+                                document.querySelectorAll('audio, video').forEach(el => {
+                                    if (el.paused) el.play();
+                                });
+                                
+                                // Call Home Assistant service to resume all media players
+                                if (window.hassConnection) {
+                                    window.hassConnection.then(hass => {
+                                        hass.callService('media_player', 'media_play', {entity_id: 'all'});
+                                    });
+                                }
+                            } catch(e) {
+                                console.log('Error resuming media:', e);
+                            }
+                        })();
+                        """.trimIndent(),
+                        null
+                    )
                 }
                 "screenWake" -> screenWake(false)
                 "screenWakeBlackout" -> screenWake(true)

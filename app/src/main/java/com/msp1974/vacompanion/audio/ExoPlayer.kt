@@ -15,6 +15,8 @@ class VAMediaPlayer(val context: Context) {
     private var currentVolume: Float = config.musicVolume
     private var mediaPlayer: ExoPlayer? = null
     var isVolumeDucked: Boolean = false
+    private var lastPlayedUrl: String = ""
+    private var lastPlayedVolume: Float = config.musicVolume
 
     companion object {
         @Volatile
@@ -27,6 +29,7 @@ class VAMediaPlayer(val context: Context) {
     }
 
     fun play(url: String) {
+        lastPlayedUrl = url
         Handler(context.mainLooper).post({
             try {
                 if (mediaPlayer != null && mediaPlayer!!.isPlaying) {
@@ -77,18 +80,26 @@ class VAMediaPlayer(val context: Context) {
     fun stop() {
         Handler(context.mainLooper).post({
             try {
-
-                mediaPlayer!!.stop()
-                mediaPlayer!!.release()
-                Timber.i("Music stopped")
-
+                if (mediaPlayer != null) {
+                    Timber.d("Stopping music player - isPlaying: ${mediaPlayer!!.isPlaying}")
+                    mediaPlayer!!.stop()
+                    mediaPlayer!!.release()
+                    mediaPlayer = null
+                    config.musicPlaying = false
+                    Timber.i("Music stopped")
+                } else {
+                    Timber.w("Cannot stop music - mediaPlayer is null")
+                    config.musicPlaying = false
+                }
             } catch (e: Exception) {
                 Timber.e("Error stopping music: $e")
+                config.musicPlaying = false
             }
         })
     }
 
     fun setVolume(volume: Float) {
+        lastPlayedVolume = volume
         Handler(context.mainLooper).post({
             if (!isVolumeDucked && mediaPlayer != null) {
                 mediaPlayer!!.volume = volume
@@ -96,6 +107,16 @@ class VAMediaPlayer(val context: Context) {
             currentVolume = volume
             Timber.i("Music volume set to $volume")
         })
+    }
+
+    fun restartPlayback() {
+        if (lastPlayedUrl.isNotEmpty()) {
+            Timber.i("Restarting music playback: $lastPlayedUrl")
+            play(lastPlayedUrl)
+            setVolume(lastPlayedVolume)
+        } else {
+            Timber.w("Cannot restart playback - no URL stored")
+        }
     }
 
     fun duckVolume() {

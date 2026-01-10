@@ -33,6 +33,7 @@ import kotlin.concurrent.atomics.plusAssign
 import kotlin.concurrent.thread
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.addAll
 import kotlinx.serialization.json.buildJsonObject
@@ -68,6 +69,7 @@ class ClientHandler(
 
     private var expectingTTSResponse: Boolean = false
     private var lastResponseIsQuestion: Boolean = false
+    private var musicWasPlayingBeforeVoice: Boolean = false
 
     // Initiate wake word broadcast receiver
     var wakeWordBroadcastReceiver: BroadcastReceiver =
@@ -88,6 +90,8 @@ class ClientHandler(
                                                     }
                                                     else -> {
                                                         volumeDucking("all", true)
+                                                        // Pause Home Assistant's media player when wake word detected
+                                                        config.eventBroadcaster.notifyEvent(Event("pause-ha-media", "", ""))
                                                         sendWakeWordDetection()
                                                         sendStartPipeline()
                                                     }
@@ -276,13 +280,7 @@ class ClientHandler(
                     }
                     "transcribe" -> {
                         // Sent when requesting voice command
-                        // Stop music if playing to return to normal mode
-                        if (config.musicPlaying) {
-                            log.d("Stopping music for voice command")
-                            musicPlayer.stop()
-                            sendMediaPlayerState("idle")
-                            config.eventBroadcaster.notifyEvent(Event("music-stopped", "", ""))
-                        }
+                        // Music already paused at wake word detection
                         volumeDucking("all", true)
                         requestInputAudioStream()
                         setPipelineNextStageTimeout(10)
@@ -292,13 +290,7 @@ class ClientHandler(
                     }
                     "voice-started" -> {
                         // Sent when detected voice command started
-                        // Stop music if playing to return to normal mode
-                        if (config.musicPlaying) {
-                            log.d("Stopping music for voice command (voice-started)")
-                            musicPlayer.stop()
-                            sendMediaPlayerState("idle")
-                            config.eventBroadcaster.notifyEvent(Event("music-stopped", "", ""))
-                        }
+                        // Music already paused at wake word detection
                         setPipelineNextStageTimeout(30)
                         config.eventBroadcaster.notifyEvent(Event("navigate-to-ha", "", ""))
                     }
@@ -311,6 +303,8 @@ class ClientHandler(
                         releaseInputAudioStream()
                         if (event.getProp("text").lowercase().contains("never mind")) {
                             volumeDucking("all", false)
+                            // Resume Home Assistant's media player when user says "never mind"
+                            config.eventBroadcaster.notifyEvent(Event("resume-ha-media", "", ""))
                         } else {
                             // If no response from conversation engine in 10s, timeout
                             setPipelineNextStageTimeout(10)
@@ -328,6 +322,9 @@ class ClientHandler(
                         if (!expectingTTSResponse) {
                             cancelPipelineNextStageTimeout()
                             volumeDucking("all", false)
+                            // Resume Home Assistant's media player when voice interaction completes
+                            config.eventBroadcaster.notifyEvent(Event("resume-ha-media", "", ""))
+
                             // No audio response, interaction complete - return to external view
                             // after configured timeout
                             val delayMs = config.screenTimeout.toLong()
@@ -375,6 +372,10 @@ class ClientHandler(
                         if (config.continueConversation && lastResponseIsQuestion) {
                             sendStartPipeline()
                         } else {
+                            // Voice interaction complete, unduck volume and resume music
+                            volumeDucking("all", false)
+                            config.eventBroadcaster.notifyEvent(Event("resume-ha-media", "", ""))
+
                             // Voice interaction complete, switch back to external view after
                             // configured timeout
                             val delayMs = config.screenTimeout.toLong()
@@ -432,6 +433,8 @@ class ClientHandler(
         expectingTTSResponse = false
 
         volumeDucking("all", false)
+        // Resume Home Assistant's media player when pipeline is reset
+        config.eventBroadcaster.notifyEvent(Event("resume-ha-media", "", ""))
 
         if (pipelineStatus != PipelineStatus.INACTIVE) {
             releaseInputAudioStream()

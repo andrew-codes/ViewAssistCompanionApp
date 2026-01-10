@@ -43,6 +43,9 @@ class CustomWebView @JvmOverloads constructor(
     fun initialise(config: APPConfig, customWebViewClient: CustomWebViewClient) {
         log.d("Initialising WebView")
 
+        // Enable WebView debugging for Chrome DevTools (chrome://inspect)
+        WebView.setWebContentsDebuggingEnabled(true)
+
         this.config = config
         this.customWebviewClient = customWebViewClient
 

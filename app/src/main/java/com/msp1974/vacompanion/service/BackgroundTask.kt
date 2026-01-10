@@ -123,10 +123,11 @@ internal class BackgroundTaskController(private val context: Context) : EventLis
                                     audioRoute = AudioRouteOption.PROCESS_NO_DETECT
                                     lastWakeWordDetectionScore = 0f
 
-                                    audioRouteResetJob = scope.launch {
-                                        delay(2000)
-                                        audioRoute = AudioRouteOption.DETECT
-                                    }
+                                    audioRouteResetJob =
+                                            scope.launch {
+                                                delay(2000)
+                                                audioRoute = AudioRouteOption.DETECT
+                                            }
                                 }
                             }
                         }
