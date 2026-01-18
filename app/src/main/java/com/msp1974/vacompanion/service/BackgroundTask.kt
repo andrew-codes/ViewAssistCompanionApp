@@ -56,7 +56,6 @@ internal class BackgroundTaskController (private val context: Context): EventLis
     private var detectionScoreMonitorJob: Job? = null
     private var lastWakeWordDetectionScore = 0f
 
-
     val zeroConf: Zeroconf = Zeroconf(context)
 
     var audioRoute: AudioRouteOption = AudioRouteOption.NONE
@@ -133,7 +132,7 @@ internal class BackgroundTaskController (private val context: Context): EventLis
             "musicVolume" -> {
                 setVolume(AudioManager.STREAM_MUSIC, event.newValue as Float)
             }
-            "wakeWord" -> {
+            "wakeWord", "wakeWordThreshold" -> {
                 scope.launch {
                     if (wakeWordJob != null && wakeWordJob!!.isActive) {
                         restartWakeWordDetection()
@@ -223,6 +222,13 @@ internal class BackgroundTaskController (private val context: Context): EventLis
             "motionDetectionSensitivity" -> {
                 motionTask.setSensitivity(event.newValue as Int)
             }
+            "useVoiceEnhancer", "useAdvancedGain" -> {
+                scope.launch {
+                    if (wakeWordJob != null && wakeWordJob!!.isActive) {
+                        restartWakeWordDetection()
+                    }
+                }
+            }
             else -> consumed = false
         }
         if (consumed) {
@@ -267,32 +273,34 @@ internal class BackgroundTaskController (private val context: Context): EventLis
         val audioRecorder = AudioRecorder(context)
         if (audioRecorder.hasRecordPermission()) {
             audioInJob = scope.launch {
-                val experimentalMicBoost = true
-                audioRecorder.startRecording(enableMicBoost = experimentalMicBoost)
+                Timber.i("Started input audio")
+                audioRecorder.startRecording()
                     .collect { audioBuffer ->
-                        var audioLevel = 0f
+                        var audioLevel = audioBuffer.max()
 
                         if (!config.isMuted) {
                             if (wakeWordEngine != null) wakeWordEngine!!.processAudio(
                                 audioBuffer
                             )
                             when (audioRoute) {
-                                AudioRouteOption.NONE, AudioRouteOption.DETECT -> {
-                                    audioLevel = audioBuffer.max()
+                                AudioRouteOption.DETECT -> {
+                                    // Test
                                 }
 
                                 AudioRouteOption.STREAM -> {
-                                    if (experimentalMicBoost) {
+                                    if (config.useAdvancedGain) {
                                         server.sendAudio(audioDSP.floatArrayToByteBuffer(audioBuffer))
                                     } else {
                                         val gAudioBuffer = audioDSP.autoGain(audioBuffer, config.micGain)
                                         val bAudioBuffer = audioDSP.floatArrayToByteBuffer(gAudioBuffer)
+                                        audioLevel = gAudioBuffer.max()
                                         server.sendAudio(bAudioBuffer)
                                     }
-                                    audioLevel = audioBuffer.max()
                                 }
                                 else -> {}
                             }
+                        } else {
+                            audioLevel = 0f
                         }
                         if (config.diagnosticsEnabled) {
                             sendDiagnostics(
@@ -427,7 +435,10 @@ internal class BackgroundTaskController (private val context: Context): EventLis
         if (wakeWordJob != null && wakeWordJob!!.isActive) {
             Timber.i("Restarting wake word detection")
             stopOpenWakeWordDetection()
+            stopInputAudio()
+
             startOpenWakeWordDetection()
+            startInputAudio()
         }
     }
 
@@ -449,6 +460,11 @@ internal class BackgroundTaskController (private val context: Context): EventLis
             detectionScoreMonitorJob?.cancel()
             detectionScoreMonitorJob = null
         }
+
+        if (config.diagnosticsEnabled) {
+            sendDiagnostics(0f, 0f)
+        }
+
         Timber.d("Wake word detection stopped")
     }
 
