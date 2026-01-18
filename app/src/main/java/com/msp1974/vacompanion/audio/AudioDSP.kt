@@ -12,7 +12,7 @@ class AudioDSP {
         val min = audioBuffer.minOrNull() ?: 0f
         val range = max - min
 
-        if (range < 0.01f) return audioBuffer
+        if (range < 0.003f) return audioBuffer
 
         val gain = (0.61f + (sensitivity * 0.03f)) / range
 

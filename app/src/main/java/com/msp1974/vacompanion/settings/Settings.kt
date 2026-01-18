@@ -84,6 +84,14 @@ class APPConfig(val context: Context) {
     var ignoreSSLErrors: Boolean = alwaysIgnoreSSLErrors
 
     //In memory settings with change notification
+    var useVoiceEnhancer: Boolean by Delegates.observable(false) { property, oldValue, newValue ->
+        onValueChangedListener(property, oldValue, newValue)
+    }
+
+    var useAdvancedGain: Boolean by Delegates.observable(false) { property, oldValue, newValue ->
+        onValueChangedListener(property, oldValue, newValue)
+    }
+
     var wakeWord: String by Delegates.observable(DEFAULT_WAKE_WORD) { property, oldValue, newValue ->
         onValueChangedListener(property, oldValue, newValue)
     }
@@ -259,6 +267,12 @@ class APPConfig(val context: Context) {
         }
         if (settings.has("ha_dashboard")) {
             homeAssistantDashboard = settings["ha_dashboard"] as String
+        }
+        if (settings.has("voice_enhancer")) {
+            useVoiceEnhancer = settings["voice_enhancer"] as Boolean
+        }
+        if (settings.has("advanced_gain")) {
+            useAdvancedGain = settings["advanced_gain"] as Boolean
         }
         if (settings.has("wake_word")) {
             wakeWord = settings["wake_word"] as String

@@ -14,9 +14,10 @@ import kotlinx.coroutines.isActive
 import android.content.Context
 import kotlin.coroutines.coroutineContext
 import android.annotation.SuppressLint
+import com.msp1974.vacompanion.audio.AudioDSP
 import com.msp1974.vacompanion.settings.APPConfig
+import timber.log.Timber
 import java.util.Collections
-import kotlin.math.max
 import kotlin.math.min
 
 /**
@@ -29,9 +30,8 @@ internal class AudioRecorder(
     private val config: APPConfig = APPConfig.getInstance(context)
 
     private var amplitudeBuffer = CircularArray(10)
-    private var targetLevel = 0.35f
-    private var minAmplification = 0.01f
-
+    private var targetLevel = 0.25f
+    private var minAmplification = 0.003f
 
     companion object {
         const val SAMPLE_RATE = 16000
@@ -58,14 +58,14 @@ internal class AudioRecorder(
      * @return Flow of float arrays containing audio samples
      */
     @SuppressLint("MissingPermission")
-    fun startRecording(enableMicBoost: Boolean = false): Flow<FloatArray> = flow {
+    fun startRecording(): Flow<FloatArray> = flow {
         require(hasRecordPermission()) { "RECORD_AUDIO permission not granted" }
 
         val minBufferSize = AudioRecord.getMinBufferSize(SAMPLE_RATE, CHANNEL_CONFIG, AUDIO_FORMAT)
         val bufferSize = maxOf(minBufferSize, BUFFER_SIZE_IN_SHORTS * 2)
 
         val audioRecord = AudioRecord(
-            MediaRecorder.AudioSource.MIC,
+            if (config.useVoiceEnhancer) MediaRecorder.AudioSource.VOICE_RECOGNITION else MediaRecorder.AudioSource.MIC,
             SAMPLE_RATE,
             CHANNEL_CONFIG,
             AUDIO_FORMAT,
@@ -83,29 +83,32 @@ internal class AudioRecorder(
 
             while (coroutineContext.isActive) {
                 val readCount = audioRecord.read(audioBuffer, 0, audioBuffer.size)
-
-                // Set target from gain in config
-                val target = targetLevel + (config.micGain * MIC_GAIN_STEP)
-                var divisor = MAX_LEVEL * target
+                var audioFloatBuffer: FloatArray
 
                 if (readCount > 0) {
-
+                    audioFloatBuffer = FloatArray(readCount) { i -> audioBuffer[i] / MAX_LEVEL}
                     // Mic boost
-                    if (enableMicBoost) {
-                        val max = audioBuffer.max().toFloat()
-                        if (max > (MAX_LEVEL * minAmplification)) {
+
+                    if (config.useAdvancedGain) {
+                        val max = audioFloatBuffer.max()
+                        if (max > minAmplification) {
                             amplitudeBuffer.add(max)
-                            val avg = amplitudeBuffer.average()
-                            divisor = MAX_LEVEL / ((MAX_LEVEL / avg) * target)
+
+                            // define gain
+                            val target = targetLevel + (config.micGain * MIC_GAIN_STEP)
+                            var gain = target / amplitudeBuffer.average()
+
+                            // Clip max amplitude
+                            if (max * gain > 0.9) {
+                                gain = min(250.0f, (gain / (max * gain )) * 0.9f)
+                            }
+
+                            // Apply gain
+                            audioFloatBuffer =
+                                (audioFloatBuffer.map { i -> i * gain }).toFloatArray()
                         }
                     }
-
-                    // Convert short array to float array (normalize to -1.0 to 1.0)
-                    val floatBuffer = FloatArray(readCount) { i ->
-                        max(-1f, min(1f, audioBuffer[i] / divisor))
-                    }
-
-                    emit(floatBuffer)
+                    emit(audioFloatBuffer)
                 }
             }
         } finally {
@@ -113,6 +116,7 @@ internal class AudioRecorder(
                 audioRecord.stop()
             }
             audioRecord.release()
+            Timber.i("Audio input stopped")
         }
     }.flowOn(Dispatchers.Default)
 }
@@ -128,6 +132,6 @@ class CircularArray(val size: Int) {
     }
 
     fun average(): Float {
-        return max(1f, buffer.sum() / samples)
+        return min(1f, buffer.sum() / samples)
     }
 }
