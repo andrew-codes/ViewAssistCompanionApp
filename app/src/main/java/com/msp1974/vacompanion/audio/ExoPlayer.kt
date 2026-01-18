@@ -15,6 +15,7 @@ class VAMediaPlayer(val context: Context) {
     private var currentVolume: Float = config.musicVolume
     private var mediaPlayer: ExoPlayer? = null
     var isVolumeDucked: Boolean = false
+    var playRequested: Boolean = false
 
     companion object {
         @Volatile
@@ -29,12 +30,14 @@ class VAMediaPlayer(val context: Context) {
     fun play(url: String) {
         Handler(context.mainLooper).post({
             try {
-                if (mediaPlayer != null && mediaPlayer!!.isPlaying) {
+                if (playRequested) {
                     mediaPlayer!!.stop()
                 }
             } catch (e: IllegalStateException) {
                 // Here is media player is stopped
             }
+
+            playRequested = true
 
             try {
                 mediaPlayer = ExoPlayer.Builder(context).build()
@@ -77,7 +80,7 @@ class VAMediaPlayer(val context: Context) {
     fun stop() {
         Handler(context.mainLooper).post({
             try {
-
+                playRequested = false
                 mediaPlayer!!.stop()
                 mediaPlayer!!.release()
                 Timber.i("Music stopped")
