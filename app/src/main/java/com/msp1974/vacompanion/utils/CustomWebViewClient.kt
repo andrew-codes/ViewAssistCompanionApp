@@ -39,7 +39,6 @@ class CustomWebViewClient(val viewModel: VAViewModel): WebViewClientCompat()  {
 
         private const val APP_PREFIX = "app://"
         private const val INTENT_PREFIX = "intent:"
-        private const val MARKET_PREFIX = "https://play.google.com/store/apps/details?id="
     }
 
     override fun onRenderProcessGone(
@@ -64,7 +63,7 @@ class CustomWebViewClient(val viewModel: VAViewModel): WebViewClientCompat()  {
 
     @Deprecated("Deprecated in Java")
     override fun shouldOverrideUrlLoading(view: WebView, url: String): Boolean {
-        url?.let {
+        url.let {
             try {
                 val pm: PackageManager = config.context.packageManager
                 val activityContext = config.context.takeIf { it is Activity } ?: return false
@@ -95,11 +94,7 @@ class CustomWebViewClient(val viewModel: VAViewModel): WebViewClientCompat()  {
                         intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
                         activityContext.startActivity(intent)
                     } else {
-                        Timber.w("No intent to launch app found, opening app store")
-                        val marketIntent = Intent(Intent.ACTION_VIEW)
-                        marketIntent.data =
-                            (MARKET_PREFIX + it.substringAfter(APP_PREFIX)).toUri()
-                        activityContext.startActivity(marketIntent)
+                        Timber.w("No intent to launch app found")
                     }
                     return true
                 } else if (it.startsWith(INTENT_PREFIX)) {
@@ -112,11 +107,7 @@ class CustomWebViewClient(val viewModel: VAViewModel): WebViewClientCompat()  {
                         )
                     }
                     if (intentPackage == null && !intent.`package`.isNullOrEmpty()) {
-                        Timber.w("No app found for intent prefix, opening app store")
-                        val marketIntent = Intent(Intent.ACTION_VIEW)
-                        marketIntent.data =
-                            (MARKET_PREFIX + intent.`package`.toString()).toUri()
-                        activityContext.startActivity(marketIntent)
+                        Timber.w("No app found for intent prefix")
                     } else {
                         activityContext.startActivity(intent)
                     }
