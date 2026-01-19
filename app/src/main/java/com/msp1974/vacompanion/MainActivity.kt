@@ -68,6 +68,7 @@ import com.msp1974.vacompanion.utils.Event
 import com.msp1974.vacompanion.utils.EventListener
 import com.msp1974.vacompanion.utils.FirebaseManager
 import com.msp1974.vacompanion.utils.Helpers
+import com.msp1974.vacompanion.utils.Helpers.Companion.isAndroidThings
 import com.msp1974.vacompanion.utils.Logger
 import com.msp1974.vacompanion.utils.Permissions
 import com.msp1974.vacompanion.utils.ScreenUtils
@@ -594,6 +595,12 @@ class MainActivity : AppCompatActivity(), EventListener, ComponentCallbacks2 {
             screenSleepWaitJob!!.cancel()
         }
         screen.wakeScreen()
+        if (!permissions.isDeviceAdmin() && !screenOffStartUp) {
+            viewModel.setScreenBlank(false)
+            screen.setScreenAlwaysOn(window, config.screenAlwaysOn)
+            screen.setScreenAutoBrightness(window, config.screenAutoBrightness)
+            screen.setScreenBrightness(window, config.screenBrightness)
+        }
     }
 
     fun screenSleep() {
@@ -605,6 +612,7 @@ class MainActivity : AppCompatActivity(), EventListener, ComponentCallbacks2 {
         }
 
         if (!screenOffInProgress) {
+            Timber.d("Sleeping screen via timeout")
             screenOffInProgress = true
             viewModel.setScreenBlank(true)
             screen.setScreenAlwaysOn(window, false)
@@ -853,7 +861,7 @@ class MainActivity : AppCompatActivity(), EventListener, ComponentCallbacks2 {
     }
 
     private fun checkAndRequestDeviceAdminPermission() {
-        if (!permissions.isDeviceAdmin()) {
+        if (!isAndroidThings(this) && !permissions.isDeviceAdmin()) {
             val intent = Intent(DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN)
             intent.putExtra(DevicePolicyManager.EXTRA_DEVICE_ADMIN, ComponentName(this, VACADeviceAdminReceiver::class.java))
             intent.putExtra(DevicePolicyManager.EXTRA_ADD_EXPLANATION, "This application requires Device Admin rights to be able to control the screen.")

@@ -8,6 +8,7 @@ import android.net.ConnectivityManager
 import android.net.wifi.WifiManager
 import android.os.Build
 import androidx.annotation.RequiresPermission
+import android.content.pm.PackageManager
 import java.net.Inet4Address
 import java.net.NetworkInterface
 
@@ -57,6 +58,10 @@ class Helpers {
             val integerChars = '0'..'9'
             var dotOccurred = 0
             return input.all { it in integerChars || it == '.' && dotOccurred++ < 1 }
+        }
+
+        fun isAndroidThings(context: Context): Boolean {
+            return context.packageManager.hasSystemFeature("android.hardware.type.embedded")
         }
     }
 }
