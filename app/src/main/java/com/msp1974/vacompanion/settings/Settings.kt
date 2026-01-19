@@ -100,6 +100,10 @@ class APPConfig(val context: Context) {
         onValueChangedListener(property, oldValue, newValue)
     }
 
+    var rawProximitySensorThreshold: Int by Delegates.observable(DEFAULT_RAW_PROXIMITY_THRESHOLD) { property, oldValue, newValue ->
+        onValueChangedListener(property, oldValue, newValue)
+    }
+
     var wakeWordThreshold: Float by Delegates.observable(DEFAULT_WAKE_WORD_THRESHOLD) { property, oldValue, newValue ->
         onValueChangedListener(property, oldValue, newValue)
     }
@@ -283,6 +287,9 @@ class APPConfig(val context: Context) {
         if (settings.has("wake_word_threshold")) {
             wakeWordThreshold = settings.getInt("wake_word_threshold").toFloat() / 10
         }
+        if (settings.has("raw_proximity_threshold")) {
+            rawProximitySensorThreshold = settings.getInt("raw_proximity_threshold")
+        }
         if (settings.has("continue_conversation")) {
             continueConversation = settings["continue_conversation"] as Boolean
         }
@@ -401,6 +408,7 @@ class APPConfig(val context: Context) {
         const val NAME = "VACA"
         const val SERVER_PORT = 10800
         const val DEFAULT_HA_HTTP_PORT = 8123
+        const val DEFAULT_RAW_PROXIMITY_THRESHOLD = 300
         const val DEFAULT_WAKE_WORD = "hey_jarvis"
         const val DEFAULT_WAKE_WORD_SOUND = "none"
         const val DEFAULT_WAKE_WORD_THRESHOLD = 0.6f
