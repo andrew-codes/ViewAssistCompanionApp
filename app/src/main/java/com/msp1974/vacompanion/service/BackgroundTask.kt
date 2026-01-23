@@ -157,6 +157,9 @@ internal class BackgroundTaskController (private val context: Context): EventLis
                 setDoNotDisturb(event.newValue as Boolean)
                 server.sendSetting("do_not_disturb", event.newValue)
             }
+            "screenSaver" -> {
+                server.sendSetting("screen_saver", event.newValue)
+            }
             "restartZeroconf" -> {
                 zeroConf.unregisterService()
                 scope.launch {

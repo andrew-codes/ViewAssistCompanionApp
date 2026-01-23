@@ -26,6 +26,7 @@ import android.os.StrictMode
 import android.provider.Settings
 import android.view.KeyEvent
 import android.view.ViewGroup
+import android.view.WindowManager
 import android.webkit.WebView
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
@@ -234,9 +235,7 @@ class MainActivity : AppCompatActivity(), EventListener, ComponentCallbacks2 {
 
             if (screenOffStartUp) {
                 config.screenBrightness = screen.getScreenBrightness()
-                screen.setScreenAutoBrightness(window, false)
-                screen.setScreenBrightness(window, 0.01f)
-                viewModel.setScreenBlank(true)
+                setScreenSaver(true)
                 screenWake()
             } else {
                 if (config.screenBrightness <= 0.3) config.screenBrightness = 0.6f
@@ -245,7 +244,7 @@ class MainActivity : AppCompatActivity(), EventListener, ComponentCallbacks2 {
                 config.screenTimeout = screen.getScreenTimeout()
                 if (config.screenTimeout < 15000) config.screenTimeout = 15000
                 screen.setScreenTimeout(config.screenTimeout)
-                viewModel.setScreenBlank(false)
+                setScreenSaver(false)
             }
         } else if (viewModel.vacaState.value.satelliteRunning) {
             screen.setScreenBrightness(window, config.screenBrightness)
@@ -565,6 +564,7 @@ class MainActivity : AppCompatActivity(), EventListener, ComponentCallbacks2 {
                 "refresh" -> webView.reload()
                 "screenWake" -> screenWake()
                 "screenSleep" -> screenSleep()
+                "screenSaver" -> screenSaver(event.newValue as Boolean)
                 "deviceBump" -> if (config.screenOnBump) screenWake()
                 "proximity" -> if (config.screenOnProximity && event.newValue as Float == 0f) screenWake()
                 "motion" -> onMotion()
@@ -586,7 +586,26 @@ class MainActivity : AppCompatActivity(), EventListener, ComponentCallbacks2 {
         if (config.screenOnMotion) screenWake()
     }
 
+    fun screenSaver(active: Boolean) {
+        if (active) {
+            Timber.d("Enabling screen saver")
+            viewModel.setScreenBlank(true)
+            screen.setScreenAlwaysOn(window, true)
+            screen.setScreenAutoBrightness(window, false)
+            screen.setScreenBrightness(window, 0.01f)
+        } else {
+            Timber.d("Disabling screen saver")
+            viewModel.setScreenBlank(false)
+            screen.setScreenAlwaysOn(window, config.screenAlwaysOn)
+            screen.setScreenAutoBrightness(window, config.screenAutoBrightness)
+            screen.setScreenBrightness(window, config.screenBrightness)
+        }
+    }
 
+    fun setScreenSaver(active: Boolean) {
+        screenSaver(active)
+        config.screenSaver = active
+    }
 
     fun screenWake() {
         Timber.d("Wake screen")
@@ -594,12 +613,18 @@ class MainActivity : AppCompatActivity(), EventListener, ComponentCallbacks2 {
         if (screenSleepWaitJob != null && screenSleepWaitJob!!.isActive) {
             screenSleepWaitJob!!.cancel()
         }
+
+        // Experimental fix for screen not turning on on A15+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+            this.setTurnScreenOn(true);
+        } else {
+            window.addFlags(WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON);
+        }
+
         screen.wakeScreen()
-        if (!permissions.isDeviceAdmin() && !screenOffStartUp) {
-            viewModel.setScreenBlank(false)
-            screen.setScreenAlwaysOn(window, config.screenAlwaysOn)
-            screen.setScreenAutoBrightness(window, config.screenAutoBrightness)
-            screen.setScreenBrightness(window, config.screenBrightness)
+
+        if (viewModel.vacaState.value.screenBlank && initialised) {
+            setScreenSaver(false)
         }
     }
 
@@ -608,16 +633,14 @@ class MainActivity : AppCompatActivity(), EventListener, ComponentCallbacks2 {
         if (permissions.isDeviceAdmin()) {
             screen.setPartialWakeLock()
             lockScreen()
+            setScreenSaver(false)
             return
         }
 
         if (!screenOffInProgress) {
             Timber.d("Sleeping screen via timeout")
             screenOffInProgress = true
-            viewModel.setScreenBlank(true)
-            screen.setScreenAlwaysOn(window, false)
-            screen.setScreenAutoBrightness(window, false)
-            screen.setScreenBrightness(window, 0.01f)
+            setScreenSaver(true)
             screen.setPartialWakeLock()
             if (screen.setScreenTimeout(1000)) {
                 screenSleepWaitJob = lifecycleScope.launch {
@@ -652,7 +675,7 @@ class MainActivity : AppCompatActivity(), EventListener, ComponentCallbacks2 {
         }
         config.screenOn = false
         screenOffInProgress = false
-        viewModel.setScreenBlank(false)
+        setScreenSaver(false)
         log.d("Screen off")
     }
 

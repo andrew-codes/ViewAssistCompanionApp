@@ -221,6 +221,11 @@ class APPConfig(val context: Context) {
         onValueChangedListener(property, oldValue, newValue)
     }
 
+    var screenSaver: Boolean by Delegates.observable(false) { property, oldValue, newValue ->
+        onValueChangedListener(property, oldValue, newValue)
+    }
+
+
 
 
     // SharedPreferences
@@ -366,8 +371,12 @@ class APPConfig(val context: Context) {
             screenTimeout = settings.getInt("screen_timeout") * 1000
         }
         if (settings.has("bump_sensitivity")) {
-            bumpSensitivity = settings.getInt("bump_sensitivity").toFloat() / 100
+            bumpSensitivity = settings.getInt("bump_sensitivity").toFloat() / 10
         }
+        if (settings.has("screen_saver")) {
+            screenSaver = settings.getBoolean("screen_saver")
+        }
+
         Firebase.crashlytics.log("Settings update")
     }
 
