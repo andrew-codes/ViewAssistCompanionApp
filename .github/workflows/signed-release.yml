@@ -2,15 +2,6 @@ name: Build, Signed, Publish
 
 on:
   workflow_dispatch:
-    inputs:
-      version_bump:
-        description: "Version bump type"
-        required: true
-        type: choice
-        options:
-          - patch
-          - minor
-          - major
 
 jobs:
   build_and_release:
@@ -22,7 +13,7 @@ jobs:
           ref: main
           fetch-depth: 0
 
-      - name: Calculate new version
+      - name: Calculate version
         id: calc_version
         run: |
           CURRENT_VERSION=$(grep 'versionName' app/build.gradle.kts | sed 's/.*versionName = "\(.*\)"/\1/')
@@ -33,44 +24,15 @@ jobs:
           MINOR="${version_parts[1]}"
           PATCH="${version_parts[2]}"
 
-          if [ "${{ inputs.version_bump }}" == "major" ]; then
-            MAJOR=$((MAJOR + 1))
-            MINOR=0
-            PATCH=0
-          elif [ "${{ inputs.version_bump }}" == "minor" ]; then
-            MINOR=$((MINOR + 1))
-            PATCH=0
-          else
-            PATCH=$((PATCH + 1))
-          fi
-
-          NEW_VERSION="$MAJOR.$MINOR.$PATCH"
-          echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
-          echo "tag=v$NEW_VERSION" >> $GITHUB_OUTPUT
-          echo "New version: $NEW_VERSION"
-
-      - name: Increment version code
-        id: inc_version_code
-        run: |
-          CURRENT_VERSION_CODE=$(grep 'versionCode' app/build.gradle.kts | sed 's/.*versionCode = \([0-9]*\)/\1/')
-          NEW_VERSION_CODE=$((CURRENT_VERSION_CODE + 1))
-          echo "version_code=$NEW_VERSION_CODE" >> $GITHUB_OUTPUT
-          echo "Previous version code: $CURRENT_VERSION_CODE"
-          echo "New version code: $NEW_VERSION_CODE"
-
-      - name: Update build.gradle.kts with new version
-        run: |
-          sed -i "s/versionCode = [0-9]*/versionCode = ${{ steps.inc_version_code.outputs.version_code }}/" app/build.gradle.kts
-          sed -i "s/versionName = \".*\"/versionName = \"${{ steps.calc_version.outputs.new_version }}\"/" app/build.gradle.kts
-          echo "Updated build.gradle.kts:"
-          cat app/build.gradle.kts | grep -A 2 "versionCode"
+          VERSION="$MAJOR.$MINOR.$PATCH"
+          echo "new_version=$VERSION" >> $GITHUB_OUTPUT
+          echo "tag=v$VERSION" >> $GITHUB_OUTPUT
+          echo "New version: $VERSION"
 
       - name: Commit version bump and create tag
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add app/build.gradle.kts
-          git commit -m "chore: bump version to ${{ steps.calc_version.outputs.new_version }} (versionCode ${{ steps.inc_version_code.outputs.version_code }})"
           git tag -a ${{ steps.calc_version.outputs.tag }} -m "Release ${{ steps.calc_version.outputs.tag }}"
           git push origin main
           git push origin ${{ steps.calc_version.outputs.tag }}
